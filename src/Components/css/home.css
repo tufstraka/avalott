@@ -98,6 +98,10 @@ body {
     color: #28a745;
     font-weight: bold;
   }
+  .inactive{
+    color: red;
+    font-weight: bold;
+  }
   
   /* Featured Prize */
   .featured-prize img {
