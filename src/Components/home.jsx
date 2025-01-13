@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from "react";
 import "./css/home.css";
+import { connectCoreWallet } from "./wallet";
 import { ethers } from "ethers";
+
 
 const Home = () => {
   const [walletConnected, setWalletConnected] = useState(false);
@@ -9,22 +11,15 @@ const Home = () => {
   const [tickets, setTickets] = useState(0);
   const [balance, setBalance] = useState(0);
 
-  // Connect Wallet Function
+  // Connect Wallet
   const connectWallet = async () => {
-    if (window.ethereum) {
-      try {
-        const provider = new ethers.providers.Web3Provider(window.ethereum);
-        const accounts = await provider.send("eth_requestAccounts", []);
-        setWalletConnected(true);
-        setWalletAddress(accounts[0]);
-
-        const balance = await provider.getBalance(accounts[0]);
-        setBalance(ethers.utils.formatEther(balance));
-      } catch (err) {
-        console.error("Error connecting to wallet:", err);
-      }
-    } else {
-      alert("Please install MetaMask or a Core-compatible wallet!");
+    try {
+      const { walletConnected, walletAddress, balance } = await connectCoreWallet();
+      setWalletConnected(walletConnected);
+      setWalletAddress(walletAddress);
+      setBalance(balance);
+    } catch (err) {
+      alert(err.message);
     }
   };
 
@@ -77,7 +72,9 @@ const Home = () => {
       <main className="main">
         <div className="lottery-status">
           <h2>Lottery Status</h2>
-          <p>Current Status: <span className="active">Active</span></p>
+          <p>
+            Current Status: <span className="active">Active</span>
+          </p>
           <p>Next Draw: <b>December 20, 2023</b></p>
           <p>Time Remaining: <b>{formatCountdown()}</b></p>
         </div>
@@ -86,7 +83,10 @@ const Home = () => {
           <h2>Featured Lottery Prize</h2>
           <img src="https://via.placeholder.com/300x200" alt="Luxury Car" />
           <p><b>Luxury Car</b></p>
-          <p>Win a brand new luxury car in the upcoming draw! Participate now to increase your chances.</p>
+          <p>
+            Win a brand new luxury car in the upcoming draw! Participate now to
+            increase your chances.
+          </p>
         </div>
 
         <div className="purchase-section">
@@ -110,4 +110,3 @@ const Home = () => {
 };
 
 export default Home;
-
