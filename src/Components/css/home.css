@@ -93,7 +93,19 @@ body {
   p {
     margin: 0.5rem 0;
   }
-  
+  .image2 {
+    
+    top: 16px;
+    left: 25px;
+    width: 30vw; 
+    max-width: 400px;
+    height: 155px; 
+    border-radius: 12px;
+    object-fit: cover; /* Ensure the image is proportionally scaled within the dimensions */
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2); /* Add some depth with a shadow */
+    overflow: hidden; /* Prevent content overflow inside the border-radius */
+}
+
   .active {
     color: #28a745;
     font-weight: bold;
