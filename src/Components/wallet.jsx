@@ -9,6 +9,7 @@ export const connectCoreWallet = async () => {
     throw new Error("No wallet detected. Please install MetaMask or Core Wallet!");
   }
 
+  // Use BrowserProvider for ethers.js v6
   const provider = new ethers.BrowserProvider(window.ethereum);
   const accounts = await provider.send("eth_requestAccounts", []);
   const walletAddress = accounts[0];

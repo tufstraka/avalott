@@ -93,6 +93,39 @@ body {
   p {
     margin: 0.5rem 0;
   }
+  .token-selection {
+    margin: 20px 0;
+    text-align: left;
+  }
+  
+  .token-selection label {
+    font-size: 16px;
+    font-weight: bold;
+    margin-right: 10px;
+    color: #333;
+  }
+  
+  .token-selection select {
+    padding: 8px 12px;
+    font-size: 14px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    background-color: #f9f9f9;
+    color: #333;
+    outline: none;
+    transition: all 0.3s ease;
+  }
+  
+  .token-selection select:focus {
+    border-color: #007bff;
+    box-shadow: 0 0 5px rgba(0, 123, 255, 0.5);
+  }
+  
+  .token-selection select option {
+    background-color: #fff;
+    color: #333;
+  }
+  
   .image2 {
     
     top: 16px;
