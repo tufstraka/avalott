@@ -3,6 +3,7 @@ import { ethers } from 'ethers';
 import "./css/home.css";
 import LOTTERY_ABI_ARTIFACT from './MultiTokenLottery.json';
 import PurchaseModal from './PurchaseModal';
+import Graph from './header';
 
 const LOTTERY_ABI = LOTTERY_ABI_ARTIFACT.abi;
 
@@ -22,6 +23,8 @@ const Home = () => {
   const [ticketAmount, setTicketAmount] = useState(1);
   const [balance, setBalance] = useState(10); // Example balance
   const [selectedToken, setSelectedToken] = useState("USDT");
+  const [graphData, setGraphData] = useState(null); // For graph
+  
   
   useEffect(() => {
     const init = async () => {
@@ -96,6 +99,9 @@ const Home = () => {
   
       setTokenConfigs(configs);
       setUserTickets(tickets);
+      const labels = availableTokens; // Token names
+      const values = availableTokens.map((token) => tickets[token] || 0); // Tickets per token
+      setGraphData({ labels, values });
     } catch (err) {
       handleError(err, 'Failed to update lottery state');
     }
@@ -211,85 +217,119 @@ const Home = () => {
         </button>
       </header>
 
+  
       <main className="main">
+      {graphData ? (
+        <div className="graph-container">
+          <h2>Tickets Purchased</h2>
+          <Graph data={graphData} />
+        </div>
+      ) : (
+        <p>Loading graph...</p>
+      )}
+
+      {/* Lottery Status and Account Details */}
+
         <div className="lottery-status">
           <h2>Lottery Status</h2>
           <p>
-            Current Status: <span className={isActive ? "active" : "inactive"}>{isActive ? "Active" : "Inactive"}</span>
+            Current Status:{" "}
+            <span className={isActive ? "active" : "inactive"}>
+              {isActive ? "Active" : "Inactive"}
+            </span>
           </p>
-          <p>Next Draw: <b>January 20, 2025</b></p>
-          <p>Time Remaining: <b>{formatTimeLeft()}</b></p>
+          <p>
+            Next Draw: <b>January 20, 2025</b>
+          </p>
+          <p>
+            Time Remaining: <b>{formatTimeLeft()}</b>
+          </p>
+          <button className="purchase-button" onClick={openModal}>
+            Start-Lottery-DAO
+          </button>
         </div>
-        
+  
         <div className="accounts-display">
           <h3>Account Details</h3>
-          <p>Address: {formatAddress(account)}</p>
-          {tokens.map((token) => (
-            <div key={token} className="account-tokens">
-              <p>Token: {token}</p>
-              <p>Tickets Purchased: {userTickets[token] || 0}</p>
-            </div>
-          ))}
+          <p className="account-address">
+            <strong>Address:</strong> {formatAddress(account)}
+          </p>
+          <div className="tokens-container">
+            {tokens.map((token) => (
+              <div key={token} className="account-tokens">
+                <p>
+                  <strong>Token:</strong> {formatAddress(token)}
+                </p>
+                <p>
+                  <strong>Tickets Purchased:</strong> {userTickets[token] || 0}
+                </p>
+              </div>
+            ))}
+          </div>
         </div>
-
-        <button className="purchase-button" onClick={openModal}>Buy Tickets</button>
-
+  
         {isModalOpen && (
           <div className="modal">
             <div className="modal-content">
-            <div className="purchase-section">
-  <h2 className="purchase-title">Buy Tickets</h2>
+              <div className="purchase-section">
+                <h2 className="purchase-title">Buy Tickets</h2>
   
-  <label className="ticket-amount-label">
-    Ticket Amount:
-    <input 
-      type="number" 
-      className="ticket-amount-input"
-      min="0" 
-      value={ticketAmount} 
-      onChange={(e) => setTicketAmount(e.target.value)} 
-      disabled={loading}
-    />
-  </label>
-
-  <label className="token-select-label">
-    Token:
-    <select 
-      className="token-select-dropdown"
-      onChange={(e) => setSelectedToken(e.target.value)} 
-      value={selectedToken}
-      disabled={loading}
-    >
-      {tokens.map(token => (
-        <option key={token} value={token}>{token}</option>
-      ))}
-    </select>
-  </label>
+                <label className="ticket-amount-label">
+                  Ticket Amount:
+                  <input
+                    type="number"
+                    className="ticket-amount-input"
+                    min="0"
+                    value={ticketAmount}
+                    onChange={(e) => setTicketAmount(e.target.value)}
+                    disabled={loading}
+                  />
+                </label>
   
-  <button 
-    className="purchase-button2" 
-    onClick={buyTickets} 
-    disabled={loading}
-  >
-    {loading ? 'Processing...' : `Buy Ticket (${tokenConfigs[selectedToken]?.ticketPrice || '0.00'} ETH)`}
-  </button>
+                <label className="token-select-label">
+                  Token:
+                  <select
+                    className="token-select-dropdown"
+                    onChange={(e) => setSelectedToken(e.target.value)}
+                    value={selectedToken}
+                    disabled={loading}
+                  >
+                    {tokens.map((token) => (
+                      <option key={token} value={token}>
+                        {token}
+                      </option>
+                    ))}
+                  </select>
+                </label>
   
-  <p className="wallet-balance">
-    Wallet Balance: {userTickets[selectedToken] || 0} Tickets
-  </p>
+                <button
+                  className="purchase-button2"
+                  onClick={buyTickets}
+                  disabled={loading}
+                >
+                  {loading
+                    ? "Processing..."
+                    : `Buy Ticket (${tokenConfigs[selectedToken]?.ticketPrice || "0.00"} ETH)`}
+                </button>
   
-  <p className="total-tickets-purchased">
-    Total Tickets Purchased: {userTickets[selectedToken] || 0}
-  </p>
-
-
-              <button className="button" onClick={closeModal}>Close</button>
-              {/* {error && <p className="error">{error}</p>} */}
+                <p className="wallet-balance">
+                  Wallet Balance: {userTickets[selectedToken] || 0} Tickets
+                </p>
+  
+                <p className="total-tickets-purchased">
+                  Total Tickets Purchased: {userTickets[selectedToken] || 0}
+                </p>
+  
+                <button className="button" onClick={closeModal}>
+                  Close
+                </button>
+                {/* {error && <p className="error">{error}</p>} */}
               </div>
             </div>
           </div>
         )}
       </main>
+  
       <footer className="footer">
         <p>&copy; 2025 Lottery-DAO. All rights reserved.</p>
         <div>
@@ -298,6 +338,7 @@ const Home = () => {
       </footer>
     </div>
   );
+  
 };
 
 export default Home;
