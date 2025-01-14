@@ -228,4 +228,196 @@ body {
       margin-top: 1rem;
     }
   }
+ /* Modal styles */
+.modal {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background-color: rgba(0, 0, 0, 0.7);
+  color: white;
+  padding: 20px;
+  border-radius: 15px 15px 0 0;
+  transform: translateY(100%);
+  animation: slide-up 0.5s forwards;
+}
+
+@keyframes slide-up {
+  0% {
+    transform: translateY(100%);
+  }
+  100% {
+    transform: translateY(0);
+  }
+}
+
+.modal-content {
+  max-width: 400px;
+  margin: 0 auto;
+  text-align: center;
+}
+
+/* Button Styles */
+.button {
+  background-color: #dea026;
+  color: white;
+  padding: 10px 20px;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.button:hover {
+  background-color: #dea026;
+}
+
+  
+  /* Token Selection */
+  .token-selection {
+    margin-top: 1rem;
+  }
+  
+  .token-selection select {
+    padding: 8px 12px;
+    font-size: 14px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    background-color: #f9f9f9;
+    color: #333;
+  }
+  
+  /* Balance info */
+  .balance-info p {
+    font-size: 1rem;
+    margin: 0.5rem 0;
+  }
+  
+  .balance-info label {
+    font-size: 16px;
+    font-weight: bold;
+    margin-right: 10px;
+  }
+  
+  /* Accounts Display */
+  .accounts-display {
+    position: absolute;
+    top: 20%;
+    right: 10%;
+    background-color: #1e1e1e;
+    padding: 1.5rem;
+    border-radius: 10px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+  }
+  
+  .accounts-display p {
+    font-size: 1.2rem;
+    margin: 0;
+    color: #f7931a;
+  }
+  
+  /* Other Styles remain unchanged */
+  .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 2rem;
+    background-color: #1f1f1f;
+    box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.5);
+  }
+  
+  .main {
+    padding: 2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+  }
+  
+  /* .purchase-section {
+    padding: 1.5rem;
+    background-color: #1e1e1e;
+    border-radius: 15px;
+    box-shadow: 0 6px 15px rgba(0, 0, 0, 0.5);
+  }
+  
+  .purchase-button {
+    background-color: #f7931a;
+    color: #ffffff;
+    border: none;
+    padding: 0.7rem 1.5rem;
+    font-size: 1rem;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+  }
+  
+  .purchase-button:hover {
+    background-color: #e68a00;
+    transform: scale(1.05);
+  } */
+  .purchase-section {
+    margin: 20px;
+    padding: 20px;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    max-width: 400px;
+  }
+  
+  .purchase-title {
+    font-size: 1.5em;
+    margin-bottom: 15px;
+  }
+  
+  .ticket-amount-label,
+  .token-select-label {
+    display: block;
+    margin-bottom: 10px;
+  }
+  
+  .ticket-amount-input,
+  .token-select-dropdown {
+    width: 100%;
+    padding: 8px;
+    margin-top: 5px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+  }
+  
+  .purchase-button {
+    width: 10%;
+    padding: 10px;
+    background-color:#e68a00;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    margin-top: 15px;
+  }
+  
+  .purchase-button:disabled {
+    background-color: #ccc;
+    cursor: not-allowed;
+  }
+  .purchase-button2 {
+    width: 50%;
+    padding: 10px;
+    background-color:#e68a00;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    margin-top: 15px;
+  }
+  
+  .purchase-button2:disabled {
+    background-color: #ccc;
+    cursor: not-allowed;
+  }
+  
+  
+  .wallet-balance,
+  .total-tickets-purchased {
+    margin-top: 10px;
+    font-size: 0.9em;
+    color: #555;
+  }
   

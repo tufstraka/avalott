@@ -1,9 +1,8 @@
 import { useState, useEffect } from 'react';
 import { ethers } from 'ethers';
-import "./css/home.css"
+import "./css/home.css";
 import LOTTERY_ABI_ARTIFACT from './MultiTokenLottery.json';
-
-
+import PurchaseModal from './PurchaseModal';
 
 const LOTTERY_ABI = LOTTERY_ABI_ARTIFACT.abi;
 
@@ -15,12 +14,14 @@ const Home = () => {
   const [endTime, setEndTime] = useState(0);
   const [tokens, setTokens] = useState([]);
   const [tokenConfigs, setTokenConfigs] = useState({});
-  const [selectedToken, setSelectedToken] = useState('');
-  const [ticketAmount, setTicketAmount] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [participants, setParticipants] = useState(0);
   const [userTickets, setUserTickets] = useState({});
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [ticketAmount, setTicketAmount] = useState(1);
+  const [balance, setBalance] = useState(10); // Example balance
+  const [selectedToken, setSelectedToken] = useState("USDT");
   
   useEffect(() => {
     const init = async () => {
@@ -50,14 +51,21 @@ const Home = () => {
     init();
   }, []);
 
+  const openModal = () => {
+    setIsModalOpen(true);
+  };
+
+  const closeModal = () => {
+    setIsModalOpen(false);
+  };
+
   const handleError = (err, message) => {
     console.error(message, err);
     setError(`${message}: ${err.message}`);
   };
-
   const updateLotteryState = async (contractInstance, userAccount) => {
     if (!contractInstance || !userAccount) return;
-
+  
     try {
       const [active, lotteryEndTime, availableTokens, participantCount] = await Promise.all([
         contractInstance.lotteryActive(),
@@ -65,15 +73,15 @@ const Home = () => {
         contractInstance.getTokens(),
         contractInstance.getParticipantCount(),
       ]);
-
+  
       setIsActive(active);
       setEndTime(Number(lotteryEndTime));
       setTokens(availableTokens);
       setParticipants(Number(participantCount));
-
+  
       const configs = {};
       const tickets = {};
-
+  
       for (const token of availableTokens) {
         const config = await contractInstance.supportedTokens(token);
         configs[token] = {
@@ -81,17 +89,18 @@ const Home = () => {
           ticketPrice: formatTicketPrice(Number(config.ticketPrice)),
           totalTickets: Number(config.totalTickets),
         };
-
+  
         const userTicketCount = await contractInstance.ticketHoldings(token, userAccount);
         tickets[token] = Number(userTicketCount);
       }
-
+  
       setTokenConfigs(configs);
       setUserTickets(tickets);
     } catch (err) {
       handleError(err, 'Failed to update lottery state');
     }
   };
+  
 
   const connectWallet = async () => {
     try {
@@ -106,12 +115,12 @@ const Home = () => {
     }
   };
 
-  const formatTicketPrice = (priceInWei, decimals = 6 ) => {
+  const formatTicketPrice = (priceInWei, decimals = 6) => {
     if (!priceInWei || priceInWei <= 0) {
       console.error('Invalid ticket price:', priceInWei);
       return '0.0000'; 
     }
-
+  
     try {
       const price = ethers.formatUnits(priceInWei, decimals);
       return parseFloat(price).toFixed(2); 
@@ -120,6 +129,7 @@ const Home = () => {
       return '0.0000'; 
     }
   };
+  
 
   const disconnectWallet = () => {
     setProvider(null);
@@ -132,9 +142,11 @@ const Home = () => {
     setUserTickets({});
     setError('');
   };
-
   const buyTickets = async () => {
-    if (!contract || !selectedToken || !ticketAmount) return;
+    if (!contract || !selectedToken || !ticketAmount || !tokenConfigs[selectedToken]) {
+      setError('Invalid selection or missing data');
+      return;
+    }
   
     setLoading(true);
     setError('');
@@ -150,7 +162,8 @@ const Home = () => {
         signer
       );
   
-      const totalCost = tokenConfigs[selectedToken].ticketPrice * Number(ticketAmount);
+      const ticketConfig = tokenConfigs[selectedToken];
+      const totalCost = ticketConfig.ticketPrice * Number(ticketAmount);
   
       const allowance = await tokenContract.allowance(account, contract.target);
   
@@ -172,7 +185,9 @@ const Home = () => {
     } finally {
       setLoading(false);
     }
+    closeModal();
   };
+  
 
   const formatTimeLeft = () => {
     if (!endTime) return 'Not started';
@@ -186,7 +201,7 @@ const Home = () => {
   };
 
   const formatAddress = (address) => `${address.slice(0, 6)}...${address.slice(-4)}`;
-  
+
   return (
     <div className="app">
       <header className="header">
@@ -205,48 +220,76 @@ const Home = () => {
           <p>Next Draw: <b>January 20, 2025</b></p>
           <p>Time Remaining: <b>{formatTimeLeft()}</b></p>
         </div>
-
-        <div className="token-selection">
-          <label htmlFor="token-select">Select Token:</label>
-          <select
-            id="token-select"
-            value={selectedToken || ""}
-            onChange={(e) => setSelectedToken(e.target.value)}
-          >
-            <option value="" disabled>
-              Choose a token
-            </option>
-            {tokens.length > 0 ? (
-              tokens.map((token) => (
-                <option key={token} value={token}>
-                  {token}
-                </option>
-              ))
-            ) : (
-              <option value="" disabled>
-                No tokens available
-              </option>
-            )}
-          </select>
+        
+        <div className="accounts-display">
+          <h3>Account Details</h3>
+          <p>Address: {formatAddress(account)}</p>
+          {tokens.map((token) => (
+            <div key={token} className="account-tokens">
+              <p>Token: {token}</p>
+              <p>Tickets Purchased: {userTickets[token] || 0}</p>
+            </div>
+          ))}
         </div>
 
-        <div className="purchase-section">
-          <h2>Purchase Tickets</h2>
-          <p>Wallet Balance: {userTickets[selectedToken] || 0} Tickets</p>
-          <input
-            type="number"
-            placeholder="Ticket Amount"
-            value={ticketAmount}
-            onChange={(e) => setTicketAmount(e.target.value)}
-            disabled={loading}
-          />
-          <button className="purchase-button" onClick={buyTickets} disabled={loading}>
-            {loading ? 'Processing...' : `Buy Ticket (${tokenConfigs[selectedToken]?.ticketPrice || '0.00'} ETH)`}
-          </button>
-          <p>Total Tickets Purchased: {userTickets[selectedToken] || 0}</p>
-        </div>
+        <button className="purchase-button" onClick={openModal}>Buy Tickets</button>
+
+        {isModalOpen && (
+          <div className="modal">
+            <div className="modal-content">
+            <div className="purchase-section">
+  <h2 className="purchase-title">Buy Tickets</h2>
+  
+  <label className="ticket-amount-label">
+    Ticket Amount:
+    <input 
+      type="number" 
+      className="ticket-amount-input"
+      min="0" 
+      value={ticketAmount} 
+      onChange={(e) => setTicketAmount(e.target.value)} 
+      disabled={loading}
+    />
+  </label>
+
+  <label className="token-select-label">
+    Token:
+    <select 
+      className="token-select-dropdown"
+      onChange={(e) => setSelectedToken(e.target.value)} 
+      value={selectedToken}
+      disabled={loading}
+    >
+      {tokens.map(token => (
+        <option key={token} value={token}>{token}</option>
+      ))}
+    </select>
+  </label>
+  
+  <button 
+    className="purchase-button2" 
+    onClick={buyTickets} 
+    disabled={loading}
+  >
+    {loading ? 'Processing...' : `Buy Ticket (${tokenConfigs[selectedToken]?.ticketPrice || '0.00'} ETH)`}
+  </button>
+  
+  <p className="wallet-balance">
+    Wallet Balance: {userTickets[selectedToken] || 0} Tickets
+  </p>
+  
+  <p className="total-tickets-purchased">
+    Total Tickets Purchased: {userTickets[selectedToken] || 0}
+  </p>
+
+
+              <button className="button" onClick={closeModal}>Close</button>
+              {/* {error && <p className="error">{error}</p>} */}
+              </div>
+            </div>
+          </div>
+        )}
       </main>
-
       <footer className="footer">
         <p>&copy; 2025 Lottery-DAO. All rights reserved.</p>
         <div>

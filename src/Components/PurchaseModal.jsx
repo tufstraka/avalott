@@ -1,10 +1,19 @@
-// src/components/PurchaseModal.js
 import React from "react";
 import Modal from "react-modal";
 
 Modal.setAppElement("#root");  // This ensures accessibility by specifying the app element
 
-const PurchaseModal = ({ isOpen, onRequestClose, ticketPrice, ticketAmount, setTicketAmount, purchaseTicket, balance }) => {
+const PurchaseModal = ({
+  isOpen,
+  onRequestClose,
+  ticketPrice,
+  ticketAmount,
+  setTicketAmount,
+  buyTicket,
+  balance,
+  selectedToken,
+  setSelectedToken
+}) => {
   return (
     <Modal
       isOpen={isOpen}
@@ -14,7 +23,20 @@ const PurchaseModal = ({ isOpen, onRequestClose, ticketPrice, ticketAmount, setT
       overlayClassName="modal-overlay"
     >
       <h2>Purchase Tickets</h2>
-      <p>Current Balance: {balance} ETH</p>
+      <div className="balance-info">
+        <p>Current Balance: {balance} {selectedToken}</p>
+        <div className="token-selection">
+          <label htmlFor="token">Select Token:</label>
+          <select
+            id="token"
+            value={selectedToken}
+            onChange={(e) => setSelectedToken(e.target.value)}
+          >
+            <option value="USDT">USDT</option>
+            <option value="USDC">USDC</option>
+          </select>
+        </div>
+      </div>
       <div>
         <label htmlFor="ticketAmount">Ticket Amount:</label>
         <input
@@ -25,9 +47,9 @@ const PurchaseModal = ({ isOpen, onRequestClose, ticketPrice, ticketAmount, setT
           min="1"
         />
       </div>
-      <p>Ticket Price: {ticketPrice} ETH</p>
-      <button onClick={purchaseTicket}>Buy Ticket</button>
-      <button onClick={onRequestClose}>Close</button>
+      <p>Ticket Price: {ticketPrice} {selectedToken}</p>
+      <button onClick={buyTicket} className="but1">Buy Ticket</button>
+      <button onClick={onRequestClose} className="but1">Close</button>
     </Modal>
   );
 };
