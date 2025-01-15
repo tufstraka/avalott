@@ -6,151 +6,216 @@ import PurchaseModal from './PurchaseModal';
 import Graph from './header';
 
 const LOTTERY_ABI = LOTTERY_ABI_ARTIFACT.abi;
+const LOTTERY_ADDRESS = '0x21C4432DD0e56242A5aBB19b482470A7C2Bb4A0c';
 
 const Home = () => {
+  // State management
   const [provider, setProvider] = useState(null);
   const [contract, setContract] = useState(null);
   const [account, setAccount] = useState('');
-  const [isActive, setIsActive] = useState(false);
-  const [endTime, setEndTime] = useState(0);
+  const [lotteryState, setLotteryState] = useState({
+    isActive: false,
+    endTime: 0,
+    participants: 0
+  });
   const [tokens, setTokens] = useState([]);
   const [tokenConfigs, setTokenConfigs] = useState({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [participants, setParticipants] = useState(0);
   const [userTickets, setUserTickets] = useState({});
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [ticketAmount, setTicketAmount] = useState(1);
-  const [balance, setBalance] = useState(10); // Example balance
-  const [selectedToken, setSelectedToken] = useState("USDT");
-  const [graphData, setGraphData] = useState(null); // For graph
-  
-  
+  const [selectedToken, setSelectedToken] = useState("");
+  const [graphData, setGraphData] = useState(null);
+
+  // Initialize Web3 and contract
   useEffect(() => {
     const init = async () => {
-      if (typeof window.ethereum !== 'undefined') {
-        try {
-          const newProvider = new ethers.BrowserProvider(window.ethereum);
-          setProvider(newProvider);
+      if (typeof window.ethereum === 'undefined') {
+        setError('Please install MetaMask');
+        return;
+      }
 
-          const accounts = await newProvider.listAccounts();
-          if (accounts.length > 0) {
-            setAccount(accounts[0].address);
+      try {
+        console.log('Initializing provider...');
+        const newProvider = new ethers.BrowserProvider(window.ethereum);
+        setProvider(newProvider);
 
-            const contractAddress = '0x21C4432DD0e56242A5aBB19b482470A7C2Bb4A0c';
-            const newContract = new ethers.Contract(contractAddress, LOTTERY_ABI, newProvider);
-            setContract(newContract);
+        console.log('Getting signer...');
+        const signer = await newProvider.getSigner();
+        console.log('Signer address:', await signer.getAddress());
 
-            await updateLotteryState(newContract, accounts[0].address);
-          }
-        } catch (err) {
+        console.log('Initializing contract...');
+        const newContract = new ethers.Contract(LOTTERY_ADDRESS, LOTTERY_ABI, signer);
+        setContract(newContract);
+
+        const address = await signer.getAddress();
+        setAccount(address);
+        console.log('Account set:', address);
+
+        await updateLotteryState(newContract, address, signer);
+
+        window.ethereum.on('accountsChanged', handleAccountsChanged);
+        window.ethereum.on('chainChanged', () => window.location.reload());
+
+        return () => {
+          window.ethereum.removeListener('accountsChanged', handleAccountsChanged);
+        };
+      } catch (err) {
+        console.error('Initialization error:', err);
+        if (err.code === 'ACTION_REJECTED') {
+          setError('Please connect your wallet to continue');
+        } else {
           handleError(err, 'Failed to initialize');
         }
-      } else {
-        setError('Please install MetaMask');
       }
     };
 
     init();
   }, []);
 
-  const openModal = () => {
-    setIsModalOpen(true);
-  };
-
-  const closeModal = () => {
-    setIsModalOpen(false);
-  };
-
-  const handleError = (err, message) => {
-    console.error(message, err);
-    setError(`${message}: ${err.message}`);
-  };
-  const updateLotteryState = async (contractInstance, userAccount) => {
-    if (!contractInstance || !userAccount) return;
-  
-    try {
-      const [active, lotteryEndTime, availableTokens, participantCount] = await Promise.all([
-        contractInstance.lotteryActive(),
-        contractInstance.lotteryEndTime(),
-        contractInstance.getTokens(),
-        contractInstance.getParticipantCount(),
-      ]);
-  
-      setIsActive(active);
-      setEndTime(Number(lotteryEndTime));
-      setTokens(availableTokens);
-      setParticipants(Number(participantCount));
-  
-      const configs = {};
-      const tickets = {};
-  
-      for (const token of availableTokens) {
-        const config = await contractInstance.supportedTokens(token);
-        configs[token] = {
-          isActive: config.isActive,
-          ticketPrice: formatTicketPrice(Number(config.ticketPrice)),
-          totalTickets: Number(config.totalTickets),
-        };
-  
-        const userTicketCount = await contractInstance.ticketHoldings(token, userAccount);
-        tickets[token] = Number(userTicketCount);
+  const handleAccountsChanged = async (accounts) => {
+    console.log('Accounts changed:', accounts);
+    if (accounts.length > 0) {
+      try {
+        const signer = await provider.getSigner();
+        const newContract = contract.connect(signer);
+        setContract(newContract);
+        setAccount(accounts[0]);
+        await updateLotteryState(newContract, accounts[0], signer);
+      } catch (err) {
+        handleError(err, 'Failed to update account');
       }
-  
-      setTokenConfigs(configs);
-      setUserTickets(tickets);
-      const labels = availableTokens; // Token names
-      const values = availableTokens.map((token) => tickets[token] || 0); // Tickets per token
-      setGraphData({ labels, values });
-    } catch (err) {
-      handleError(err, 'Failed to update lottery state');
+    } else {
+      setAccount('');
+      setUserTickets({});
     }
   };
-  
+
+  const updateLotteryState = async (contractInstance, userAccount, signer) => {
+    if (!contractInstance || !userAccount || !signer) return;
+
+    try {
+      setLoading(true);
+      console.log('Updating lottery state...');
+
+      const [
+        active,
+        endTime,
+        participantCount,
+        availableTokens
+      ] = await Promise.all([
+        contractInstance.lotteryActive(),
+        contractInstance.lotteryEndTime(),
+        contractInstance.getParticipantCount(),
+        contractInstance.getTokens()
+      ]);
+
+      console.log('Lottery active:', active);
+      console.log('Lottery end time:', endTime);
+      console.log('Participant count:', participantCount);
+      console.log('Available tokens:', availableTokens);
+
+      setLotteryState({
+        isActive: active,
+        endTime: Number(endTime),
+        participants: Number(participantCount)
+      });
+
+      setTokens(availableTokens);
+
+      const configs = {};
+      const tickets = {};
+
+      for (const token of availableTokens) {
+        try {
+          console.log(`Loading token ${token}...`);
+          const tokenContract = new ethers.Contract(
+            token,
+            ['function decimals() view returns (uint8)'],
+            signer
+          );
+
+          const [config, userTicketCount, decimals] = await Promise.all([
+            contractInstance.supportedTokens(token),
+            contractInstance.ticketHoldings(token, userAccount),
+            tokenContract.decimals()
+          ]);
+
+          console.log(`Token ${token} config:`, config);
+          console.log(`User ticket count for ${token}:`, userTicketCount);
+          console.log(`Token decimals for ${token}:`, decimals);
+
+          configs[token] = {
+            isActive: config.isActive,
+            ticketPrice: config.ticketPrice.toString(),
+            totalTickets: Number(config.totalTickets),
+            decimals: decimals
+          };
+
+          tickets[token] = Number(userTicketCount);
+        } catch (err) {
+          console.error(`Error loading token ${token}:`, err);
+          configs[token] = {
+            isActive: false,
+            ticketPrice: '0',
+            totalTickets: 0,
+            decimals: 18  // Default to 18 decimals if loading fails
+          };
+          tickets[token] = 0;
+        }
+      }
+      
+      setTokenConfigs(configs);
+      setUserTickets(tickets);
+
+      setGraphData({
+        labels: availableTokens,
+        values: availableTokens.map(token => tickets[token] || 0)
+      });
+
+    } catch (err) {
+      handleError(err, 'Failed to update lottery state');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const connectWallet = async () => {
     try {
-      if (typeof window.ethereum !== 'undefined') {
-        await window.ethereum.request({ method: 'eth_requestAccounts' });
-        const accounts = await provider.listAccounts();
-        setAccount(accounts[0].address);
-        await updateLotteryState(contract, accounts[0].address);
+      if (typeof window.ethereum === 'undefined') {
+        throw new Error('MetaMask is not installed');
       }
+
+      console.log('Requesting accounts...');
+      const accounts = await window.ethereum.request({ 
+        method: 'eth_requestAccounts' 
+      });
+      
+      const signer = await provider.getSigner();
+      const newContract = contract.connect(signer);
+      setContract(newContract);
+      setAccount(accounts[0]);
+      await updateLotteryState(newContract, accounts[0], signer);
     } catch (err) {
       handleError(err, 'Failed to connect wallet');
     }
   };
 
-  const formatTicketPrice = (priceInWei, decimals = 6) => {
-    if (!priceInWei || priceInWei <= 0) {
-      console.error('Invalid ticket price:', priceInWei);
-      return '0.0000'; 
-    }
-  
-    try {
-      const price = ethers.formatUnits(priceInWei, decimals);
-      return parseFloat(price).toFixed(2); 
-    } catch (err) {
-      console.error('Error formatting ticket price:', err);
-      return '0.0000'; 
-    }
+  const formatTokenPrice = (price, token) => {
+    if (!tokenConfigs[token]) return '0.00';
+    const decimals = tokenConfigs[token].decimals || 18;
+    return ethers.formatUnits(price, decimals);
   };
-  
 
-  const disconnectWallet = () => {
-    setProvider(null);
-    setContract(null);
-    setAccount('');
-    setIsActive(false);
-    setEndTime(0);
-    setTokens([]);
-    setTokenConfigs({});
-    setUserTickets({});
-    setError('');
-  };
   const buyTickets = async () => {
     if (!contract || !selectedToken || !ticketAmount || !tokenConfigs[selectedToken]) {
       setError('Invalid selection or missing data');
+      return;
+    }
+  
+    if (typeof ticketAmount !== 'number' || ticketAmount <= 0) {
+      setError('Please enter a valid number of tickets.');
       return;
     }
   
@@ -161,44 +226,98 @@ const Home = () => {
       const signer = await provider.getSigner();
       const connectedContract = contract.connect(signer);
   
+      if (!lotteryState.isActive) {
+        throw new Error('Lottery is not active');
+      }
+  
+      if (Date.now() / 1000 > lotteryState.endTime) {
+        throw new Error('Lottery has ended');
+      }
+  
       const tokenContract = new ethers.Contract(
         selectedToken,
-        ['function allowance(address owner, address spender) view returns (uint256)',
-         'function approve(address spender, uint256 amount) public returns (bool)'],
+        [
+          'function approve(address spender, uint256 amount) returns (bool)',
+          'function allowance(address owner, address spender) view returns (uint256)',
+          'function balanceOf(address account) view returns (uint256)',
+          'function decimals() view returns (uint8)'
+        ],
         signer
       );
   
-      const ticketConfig = tokenConfigs[selectedToken];
-      const totalCost = ticketConfig.ticketPrice * Number(ticketAmount);
-  
-      const allowance = await tokenContract.allowance(account, contract.target);
-  
-      if (allowance < totalCost) {
-        const approveTx = await tokenContract.approve(contract.target, totalCost);
-        await approveTx.wait();
-        console.log('Allowance granted');
-      } else {
-        console.log('Sufficient allowance already granted');
+      const tokenConfig = tokenConfigs[selectedToken];
+      if (!tokenConfig) {
+        throw new Error('Invalid token configuration');
       }
   
-      const tx = await connectedContract.buyTickets(selectedToken, ticketAmount);
-      await tx.wait();
+      const ticketPriceWei = BigInt(tokenConfig.ticketPrice);
+      const ticketAmountBigInt = BigInt(ticketAmount);
+      const totalCostWei = ticketPriceWei * ticketAmountBigInt;
   
-      setTicketAmount('');
+      const tokenDecimals = await tokenContract.decimals();
+      console.log('Token decimals:', tokenDecimals);
+  
+      const balance = await tokenContract.balanceOf(await signer.getAddress());
+      console.log('User balance:', balance.toString());
+  
+      if (balance < totalCostWei) {
+        throw new Error('Insufficient token balance');
+      }
+  
+      const allowance = await tokenContract.allowance(
+        await signer.getAddress(),
+        contract.target
+      );
+      console.log('Current allowance:', allowance.toString());
+  
+      if (allowance < totalCostWei) {
+        console.log('Approving tokens...');
+        const approveTx = await tokenContract.approve(
+          contract.target,
+          totalCostWei,
+          { gasLimit: 100000 }
+        );
+        await approveTx.wait();
+        console.log('Tokens approved');
+      }
+  
+      console.log('Buying tickets...', {
+        token: selectedToken,
+        amount: ticketAmount,
+        totalCost: ethers.formatUnits(totalCostWei.toString(), tokenDecimals)
+      });
+  
+      const tx = await connectedContract.buyTickets(
+        selectedToken,
+        ticketAmount
+      );
+  
+      await tx.wait();
+      console.log('Tickets purchased successfully');
+  
+      setTicketAmount(1);
       await updateLotteryState(contract, account);
+      setIsModalOpen(false);
+  
     } catch (err) {
-      handleError(err, 'Failed to buy tickets');
+      console.error('Transaction failed:', err);
+      setError(`Transaction failed: ${err.message}`);
     } finally {
       setLoading(false);
     }
-    closeModal();
   };
-  
+
+  const handleError = (err, message) => {
+    console.error(message, err);
+    setError(`${message}: ${err.message}`);
+  };
 
   const formatTimeLeft = () => {
-    if (!endTime) return 'Not started';
+    if (!lotteryState.endTime) return 'Not started';
+    
     const now = Math.floor(Date.now() / 1000);
-    const timeLeft = endTime - now;
+    const timeLeft = lotteryState.endTime - now;
+    
     if (timeLeft <= 0) return 'Ended';
 
     const hours = Math.floor(timeLeft / 3600);
@@ -206,139 +325,102 @@ const Home = () => {
     return `${hours}h ${minutes}m`;
   };
 
-  const formatAddress = (address) => `${address.slice(0, 6)}...${address.slice(-4)}`;
+  const formatAddress = (address) => {
+    return address ? `${address.slice(0, 6)}...${address.slice(-4)}` : '';
+  };
 
   return (
     <div className="app">
       <header className="header">
         <h1>Lottery-DAO</h1>
-        <button className="wallet-button" onClick={connectWallet}>
-          {account ? "Wallet Connected" : "Connect Wallet"}
+        <button 
+          className="wallet-button" 
+          onClick={connectWallet}
+          disabled={loading}
+        >
+          {account ? formatAddress(account) : "Connect Wallet"}
         </button>
       </header>
 
-  
       <main className="main">
-      {graphData ? (
-        <div className="graph-container">
-          <h2>Tickets Purchased</h2>
-          <Graph data={graphData} />
-        </div>
-      ) : (
-        <p>Loading graph...</p>
-      )}
+        {error && (
+          <div className="error-message">
+            {error}
+            <button onClick={() => setError('')}>×</button>
+          </div>
+        )}
 
-      {/* Lottery Status and Account Details */}
+        {graphData && (
+          <div className="graph-container">
+            <h2>Your Ticket Distribution</h2>
+            <Graph data={graphData} />
+          </div>
+        )}
 
         <div className="lottery-status">
           <h2>Lottery Status</h2>
-          <p>
-            Current Status:{" "}
-            <span className={isActive ? "active" : "inactive"}>
-              {isActive ? "Active" : "Inactive"}
-            </span>
-          </p>
-          <p>
-            Next Draw: <b>January 20, 2025</b>
-          </p>
-          <p>
-            Time Remaining: <b>{formatTimeLeft()}</b>
-          </p>
-          <button className="purchase-button" onClick={openModal}>
-            Start-Lottery-DAO
+          <div className="status-grid">
+            <div className="status-item">
+              <span>Status:</span>
+              <span className={lotteryState.isActive ? "active" : "inactive"}>
+                {lotteryState.isActive ? "Active" : "Inactive"}
+              </span>
+            </div>
+            <div className="status-item">
+              <span>Time Remaining:</span>
+              <span>{formatTimeLeft()}</span>
+            </div>
+            <div className="status-item">
+              <span>Participants:</span>
+              <span>{lotteryState.participants}</span>
+            </div>
+          </div>
+          
+          <button 
+            className="purchase-button" 
+            onClick={() => setIsModalOpen(true)}
+            disabled={!account || !lotteryState.isActive || loading}
+          >
+            Buy Tickets
           </button>
         </div>
-  
-        <div className="accounts-display">
-          <h3>Account Details</h3>
-          <p className="account-address">
-            <strong>Address:</strong> {formatAddress(account)}
-          </p>
-          <div className="tokens-container">
-            {tokens.map((token) => (
-              <div key={token} className="account-tokens">
-                <p>
-                  <strong>Token:</strong> {formatAddress(token)}
-                </p>
-                <p>
-                  <strong>Tickets Purchased:</strong> {userTickets[token] || 0}
-                </p>
+
+        <div className="tokens-overview">
+          <h3>Your Tickets</h3>
+          <div className="tokens-grid">
+              {tokens.map((token) => (
+              <div key={token} className="token-card">
+                <h4>{formatAddress(token)}</h4>
+                <p>Tickets: {userTickets[token] || 0}</p>
+                <p>Price: {formatTokenPrice(tokenConfigs[token]?.ticketPrice || '0', token)} tokens</p>
               </div>
             ))}
           </div>
         </div>
-  
+
         {isModalOpen && (
-          <div className="modal">
-            <div className="modal-content">
-              <div className="purchase-section">
-                <h2 className="purchase-title">Buy Tickets</h2>
-  
-                <label className="ticket-amount-label">
-                  Ticket Amount:
-                  <input
-                    type="number"
-                    className="ticket-amount-input"
-                    min="0"
-                    value={ticketAmount}
-                    onChange={(e) => setTicketAmount(e.target.value)}
-                    disabled={loading}
-                  />
-                </label>
-  
-                <label className="token-select-label">
-                  Token:
-                  <select
-                    className="token-select-dropdown"
-                    onChange={(e) => setSelectedToken(e.target.value)}
-                    value={selectedToken}
-                    disabled={loading}
-                  >
-                    {tokens.map((token) => (
-                      <option key={token} value={token}>
-                        {token}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-  
-                <button
-                  className="purchase-button2"
-                  onClick={buyTickets}
-                  disabled={loading}
-                >
-                  {loading
-                    ? "Processing..."
-                    : `Buy Ticket (${tokenConfigs[selectedToken]?.ticketPrice || "0.00"} ETH)`}
-                </button>
-  
-                <p className="wallet-balance">
-                  Wallet Balance: {userTickets[selectedToken] || 0} Tickets
-                </p>
-  
-                <p className="total-tickets-purchased">
-                  Total Tickets Purchased: {userTickets[selectedToken] || 0}
-                </p>
-  
-                <button className="button" onClick={closeModal}>
-                  Close
-                </button>
-                {/* {error && <p className="error">{error}</p>} */}
-              </div>
-            </div>
-          </div>
+          <PurchaseModal
+            isOpen={isModalOpen}
+            onRequestClose={() => setIsModalOpen(false)}
+            ticketPrice={formatTokenPrice(tokenConfigs[selectedToken]?.ticketPrice || "0.00")}
+            ticketAmount={ticketAmount}
+            setTicketAmount={setTicketAmount}
+            buyTickets={buyTickets}
+            selectedToken={selectedToken}
+            setSelectedToken={setSelectedToken}
+            tokens={tokens}
+            tokenConfigs={tokenConfigs}
+            loading={loading}
+            userTickets={userTickets}
+          />
         )}
       </main>
-  
+
       <footer className="footer">
         <p>&copy; 2025 Lottery-DAO. All rights reserved.</p>
-        <div>
-          <a href="#privacy">Privacy Policy</a> | <a href="#contact">Contact Us</a>
-        </div>
       </footer>
     </div>
   );
-  
 };
 
 export default Home;
