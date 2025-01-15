@@ -385,18 +385,18 @@ const Home = () => {
           </button>
         </div>
 
-        <div className="tokens-overview">
-          <h3>Your Tickets</h3>
-          <div className="tokens-grid">
-              {tokens.map((token) => (
-              <div key={token} className="token-card">
-                <h4>{formatAddress(token)}</h4>
-                <p>Tickets: {userTickets[token] || 0}</p>
-                <p>Price: {formatTokenPrice(tokenConfigs[token]?.ticketPrice || '0', token)} tokens</p>
-              </div>
-            ))}
-          </div>
+      <div className="tickets-overview">
+        <h3>Your Tickets</h3>
+        <div className="tickets-grid">
+          {tokens.map((token) => (
+            <div key={token} className="ticket-card">
+              <h4>{formatAddress(token)}</h4>
+              <p>Tickets: {userTickets[token] || 0}</p>
+              <p>Price: {formatTokenPrice(tokenConfigs[token]?.ticketPrice || '0', token)} tokens</p>
+            </div>
+          ))}
         </div>
+      </div>
 
         {isModalOpen && (
           <PurchaseModal
