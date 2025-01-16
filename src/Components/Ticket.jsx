@@ -333,7 +333,7 @@ const Ticket = () => {
 
   return (
     <div className="app">
-      <AdminDashboard contract={contract} account={account} />
+      
 
       <main className="main">
         {error && (

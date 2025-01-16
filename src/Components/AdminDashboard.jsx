@@ -1,17 +1,32 @@
 import React, { useState, useEffect } from 'react';
 import { ethers } from 'ethers';
 import { useNavigate } from 'react-router-dom';
-import './css/AdminDashboard.css';
-import LOTTERY_ABI_ARTIFACT from './MultiTokenLottery.json';
+import "./css/AdminDashboard.css"
 
-const LOTTERY_ABI = LOTTERY_ABI_ARTIFACT.abi;
-const LOTTERY_ADDRESS = '0x21C4432DD0e56242A5aBB19b482470A7C2Bb4A0c'; // Replace with your contract address
+const LOTTERY_ADDRESS = '0x21C4432DD0e56242A5aBB19b482470A7C2Bb4A0c';
 const ADMINS = [
-  '0x5B058198Fc832E592edA2b749bc6e4380f4ED458', // Example admin address
-  // Add more admin addresses here
+  '0x5B058198Fc832E592edA2b749bc6e4380f4ED458',
 ];
 
-const AdminDashboard = ({ contract, account }) => {
+// ABI definition for required functions
+const LOTTERY_ABI = [
+  "function owner() view returns (address)",
+  "function lotteryActive() view returns (bool)",
+  "function lotteryEndTime() view returns (uint256)",
+  "function getParticipantCount() view returns (uint256)",
+  "function participants(uint256) view returns (address addr, uint256 tickets, address tokenUsed)",
+  "function getTokens() view returns (address[])",
+  "function startLottery() external",
+  "function selectWinners() external",
+  "function ticketHoldings(address, address) view returns (uint256)",
+  "function supportedTokens(address) view returns (bool isActive, uint256 ticketPrice, uint256 totalTickets)"
+];
+
+const AdminDashboard = () => {
+  const navigate = useNavigate();
+  const [error, setError] = useState(null);
+  const [contract, setContract] = useState(null);
+  const [account, setAccount] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isOwner, setIsOwner] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -19,120 +34,200 @@ const AdminDashboard = ({ contract, account }) => {
     isActive: false,
     participants: 0,
     totalTickets: 0,
-    prizePool: '0',
     endTime: 0,
   });
   const [participantData, setParticipantData] = useState([]);
   const [tokenList, setTokenList] = useState([]);
-  const navigate = useNavigate();
+  const [connectingWallet, setConnectingWallet] = useState(false);
 
-  // Check if the current user is an admin or owner
-  useEffect(() => {
-    const checkAdminAndOwner = async () => {
-        if (!contract || !account) return;
-        try {
-          const owner = await contract.owner();
-          console.log('Owner:', owner);
-          setIsOwner(owner.toLowerCase() === account.toLowerCase());
+
+  const connectWallet = async () => {
+    if (connectingWallet) return; // Prevent multiple connection attempts
+    
+    try {
+      setConnectingWallet(true);
       
-          // Check if the current account is in the hardcoded admin list
-          const isAdmin = ADMINS.map((a) => a.toLowerCase()).includes(account.toLowerCase());
-          console.log('Is Admin:', isAdmin);
-          setIsAdmin(isAdmin || owner.toLowerCase() === account.toLowerCase());
+      if (!window.ethereum) {
+        throw new Error('MetaMask is not installed');
+      }
+
+      // First check if we're already connected
+      const accounts = await window.ethereum.request({ 
+        method: 'eth_accounts' 
+      });
       
-          if (!isAdmin && owner.toLowerCase() !== account.toLowerCase()) {
-            console.log('Not an admin or owner, redirecting...');
-            navigate('/'); // Redirect if not admin or owner
-          }
-        } catch (error) {
-          console.error('Error checking admin role:', error);
-          navigate('/');
-        } finally {
-          setLoading(false);
-        }
-      };
-    checkAdminAndOwner();
-  }, [contract, account]);
+      if (accounts.length === 0) {
+        // Only request access if we're not already connected
+        await window.ethereum.request({ 
+          method: 'eth_requestAccounts' 
+        });
+      }
+      
+      // Get the current account
+      const currentAccounts = await window.ethereum.request({ 
+        method: 'eth_accounts' 
+      });
+      
+      if (currentAccounts.length === 0) {
+        throw new Error('No authorized account found');
+      }
 
-  // Fetch lottery state and participant data
+      const currentAccount = currentAccounts[0];
+      setAccount(currentAccount);
+
+      // Initialize provider and contract
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      const signer = await provider.getSigner();
+      const lotteryContract = new ethers.Contract(LOTTERY_ADDRESS, LOTTERY_ABI, signer);
+      setContract(lotteryContract);
+
+      return true;
+    } catch (err) {
+      console.error('Connection error:', err);
+      setError(err.message);
+      return false;
+    } finally {
+      setConnectingWallet(false);
+    }
+  };
+  // Initialize web3 connection and contract
   useEffect(() => {
-    if (!contract || !isAdmin) return;
-
-    const fetchData = async () => {
+    const init = async () => {
       try {
-        const [active, endTime, participants, totalTickets, prizePool, tokens] = await Promise.all([
+        const connected = await connectWallet();
+        
+        if (connected) {
+          // Setup event listeners only after successful connection
+          window.ethereum.on('accountsChanged', () => {
+            window.location.reload();
+          });
+
+          window.ethereum.on('chainChanged', () => {
+            window.location.reload();
+          });
+
+          window.ethereum.on('disconnect', () => {
+            window.location.reload();
+          });
+        }
+      } catch (err) {
+        console.error('Initialization error:', err);
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    init();
+
+    return () => {
+      if (window.ethereum) {
+        window.ethereum.removeAllListeners();
+      }
+    };
+  }, []);
+
+  // Check admin status and fetch data
+  useEffect(() => {
+    const checkAdminAndFetchData = async () => {
+      if (!contract || !account) return;
+
+      try {
+        const owner = await contract.owner();
+        const isCurrentOwner = owner.toLowerCase() === account.toLowerCase();
+        const isCurrentAdmin = ADMINS.map(a => a.toLowerCase()).includes(account.toLowerCase());
+
+        setIsOwner(isCurrentOwner);
+        setIsAdmin(isCurrentOwner || isCurrentAdmin);
+
+        if (!isCurrentOwner && !isCurrentAdmin) {
+          navigate('/');
+          return;
+        }
+
+        // Fetch lottery state
+        const [active, endTime, participantCount, tokens] = await Promise.all([
           contract.lotteryActive(),
           contract.lotteryEndTime(),
           contract.getParticipantCount(),
-          contract.getTotalTickets(),
-          contract.getPrizePool(),
-          contract.getTokens(),
+          contract.getTokens()
         ]);
 
         setLotteryState({
           isActive: active,
-          participants: participants.toNumber(),
-          totalTickets: totalTickets.toNumber(),
-          prizePool: ethers.utils.formatEther(prizePool),
-          endTime: endTime.toNumber(),
+          participants: Number(participantCount), // Convert BigInt to Number
+          endTime: Number(endTime), // Convert BigInt to Number
         });
+
+        setTokenList(tokens);
 
         // Fetch participant details
         const participantList = [];
-        for (let i = 0; i < participants.toNumber(); i++) {
+        for (let i = 0; i < Number(participantCount); i++) {
           const participant = await contract.participants(i);
           participantList.push({
             addr: participant.addr,
-            tickets: participant.tickets.toNumber(),
+            tickets: Number(participant.tickets), // Convert BigInt to Number
             tokenUsed: participant.tokenUsed,
           });
         }
         setParticipantData(participantList);
 
-        // Fetch token list
-        setTokenList(tokens);
-      } catch (error) {
-        console.error('Error fetching lottery data:', error);
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
       }
     };
 
-    fetchData();
-    const interval = setInterval(fetchData, 30000); // Refresh every 30 seconds
+    checkAdminAndFetchData();
+    const interval = setInterval(checkAdminAndFetchData, 30000);
     return () => clearInterval(interval);
-  }, [contract, isAdmin]);
+  }, [contract, account, navigate]);
 
   const startLottery = async () => {
+    if (!contract) return;
     try {
       setLoading(true);
       const tx = await contract.startLottery();
       await tx.wait();
-      setLotteryState((prev) => ({ ...prev, isActive: true }));
-    } catch (error) {
-      console.error('Error starting lottery:', error);
+      window.location.reload();
+    } catch (err) {
+      setError(err.message);
     } finally {
       setLoading(false);
     }
   };
 
   const endLottery = async () => {
+    if (!contract) return;
     try {
       setLoading(true);
       const tx = await contract.selectWinners();
       await tx.wait();
-      setLotteryState((prev) => ({ ...prev, isActive: false }));
-    } catch (error) {
-      console.error('Error ending lottery:', error);
+      window.location.reload();
+    } catch (err) {
+      setError(err.message);
     } finally {
       setLoading(false);
     }
   };
+
+  if (error) {
+    return (
+      <div className="error-container">
+        <h2>Error</h2>
+        <p>{error}</p>
+      </div>
+    );
+  }
 
   if (loading) {
     return <div className="loading">Loading admin dashboard...</div>;
   }
 
   if (!isAdmin && !isOwner) {
-    return null; // Navigate would have redirected
+    return null;
   }
 
   return (
@@ -158,17 +253,15 @@ const AdminDashboard = ({ contract, account }) => {
           <p className="stat-value">{lotteryState.participants}</p>
         </div>
         <div className="stat-card">
-          <h3>Total Tickets</h3>
-          <p className="stat-value">{lotteryState.totalTickets}</p>
-        </div>
-        <div className="stat-card">
-          <h3>Prize Pool</h3>
-          <p className="stat-value">{parseFloat(lotteryState.prizePool).toFixed(4)} ETH</p>
-        </div>
-        <div className="stat-card">
           <h3>Status</h3>
           <p className={`stat-value ${lotteryState.isActive ? 'active' : 'inactive'}`}>
             {lotteryState.isActive ? 'Active' : 'Inactive'}
+          </p>
+        </div>
+        <div className="stat-card">
+          <h3>End Time</h3>
+          <p className="stat-value">
+            {lotteryState.endTime > 0 ? new Date(lotteryState.endTime * 1000).toLocaleString() : 'N/A'}
           </p>
         </div>
       </div>
