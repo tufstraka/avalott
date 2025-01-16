@@ -1,17 +1,17 @@
 import React from "react";
 import Modal from "react-modal";
-import "./css/home.css";
+import "./css/Modal.css";
 
 // Set app element for accessibility
 Modal.setAppElement("#root");
-
 const PurchaseModal = ({
   isOpen,
   onRequestClose,
-  ticketPrice,
+  ticketPriceRaw,
+  ticketPriceFormatted,
   ticketAmount,
   setTicketAmount,
-  buyTickets, // Updated from buyTicket to match Home component
+  buyTickets,
   selectedToken,
   setSelectedToken,
   tokens,
@@ -25,9 +25,27 @@ const PurchaseModal = ({
   };
 
   const calculateTotalCost = () => {
-    if (!selectedToken || !tokenConfigs[selectedToken]) return "0.00";
-    const price = parseFloat(tokenConfigs[selectedToken].ticketPrice);
-    return (price * ticketAmount).toFixed(4);
+    if (!selectedToken || ticketAmount < 1) return "0.00";
+  
+    // Step 1: Remove non-numeric characters from the formatted price
+    const cleanedPrice = ticketPriceFormatted.replace(/[^0-9.]/g, '');
+  
+    // Step 2: Convert the cleaned string to a number
+    const priceAsNumber = parseFloat(cleanedPrice);
+  
+    // Step 3: Validate the number
+    if (isNaN(priceAsNumber)) {
+      console.error("Invalid ticket price format:", ticketPriceFormatted);
+      return "0.00";
+    }
+  
+    // Step 4: Calculate the total cost
+    const total = priceAsNumber * ticketAmount;
+  
+    // Step 5: Format the total to 4 decimal places
+    const formattedTotal = total.toFixed(4);
+  
+    return formattedTotal;
   };
 
   const formatAddress = (address) => {
@@ -54,7 +72,10 @@ const PurchaseModal = ({
               id="token"
               className="token-select"
               value={selectedToken}
-              onChange={(e) => setSelectedToken(e.target.value)}
+              onChange={(e) => {
+                setSelectedToken(e.target.value);
+                setTicketAmount(1);
+              }}
               disabled={loading}
             >
               <option value="">Select a token</option>
@@ -75,7 +96,7 @@ const PurchaseModal = ({
                 </p>
                 <p className="info-item">
                   <span>Price per Ticket:</span>
-                  <span>{tokenConfigs[selectedToken].ticketPrice} ETH</span>
+                  <span>{ticketPriceFormatted}</span>
                 </p>
               </div>
 
@@ -98,7 +119,7 @@ const PurchaseModal = ({
               <div className="total-cost">
                 <p className="info-item">
                   <span>Total Cost:</span>
-                  <span>{calculateTotalCost()} ETH</span>
+                  <span>{calculateTotalCost()} </span>
                 </p>
               </div>
             </>
@@ -130,5 +151,4 @@ const PurchaseModal = ({
     </Modal>
   );
 };
-
 export default PurchaseModal;
