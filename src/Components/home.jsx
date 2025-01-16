@@ -23,22 +23,22 @@ const Home = () => {
       </section>
 
       <section className="features-grid">
-        <div className="feature-card">
-          <h3>Quick Pick</h3>
-          <p>Let luck choose your numbers instantly</p>
-        </div>
-        <div className="feature-card">
-          <h3>Secure Play</h3>
-          <p>Your tickets are safely stored digitally</p>
-        </div>
-        <div className="feature-card">
-          <h3>Instant Notifications</h3>
-          <p>Get alerts when you win</p>
-        </div>
-        <div className="feature-card">
-          <h3>Multiple Games</h3>
-          <p>Choose from various exciting lottery games</p>
-        </div>
+      <div className="feature-card">
+        <h3>Instant Ticket Purchase</h3>
+        <p>Buy your tickets in seconds and join the draw instantly</p>
+      </div>
+      <div className="feature-card">
+        <h3>Secure Wallet Integration</h3>
+        <p>Your tickets and winnings are safely stored in your secure digital wallet</p>
+      </div>
+      <div className="feature-card">
+        <h3>Fair & Transparent Draws</h3>
+        <p>Every draw is conducted on the blockchain, ensuring fairness and transparency</p>
+      </div>
+      <div className="feature-card">
+        <h3>Easy to Play</h3>
+        <p>Simple and user-friendly interface for a seamless lottery experience</p>
+      </div>
       </section>
 
       {/* <WinnersList /> */}
