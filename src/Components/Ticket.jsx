@@ -4,6 +4,8 @@ import "./css/ticket.css";
 import LOTTERY_ABI_ARTIFACT from './MultiTokenLottery.json';
 import PurchaseModal from './PurchaseModal';
 import Graph from './graph';
+import AdminDashboard from './AdminDashboard';
+
 
 const LOTTERY_ABI = LOTTERY_ABI_ARTIFACT.abi;
 const LOTTERY_ADDRESS = '0x21C4432DD0e56242A5aBB19b482470A7C2Bb4A0c';
@@ -331,7 +333,7 @@ const Ticket = () => {
 
   return (
     <div className="app">
-     
+      <AdminDashboard contract={contract} account={account} />
 
       <main className="main">
         {error && (

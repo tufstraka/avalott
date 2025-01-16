@@ -23,7 +23,7 @@ function App() {
             <Route path="/" element={<Home />} />
             {/* Add other routes as needed */}
             <Route path="/buy-tickets" element={<Ticket />} />
-            <Route path="/admin" element={<AdminDashboard contract={contract} account={account} />} />
+            <Route path="/admin" element={<AdminDashboard />} />
           </Routes>
         </main>
         <Footer />
