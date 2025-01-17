@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { ethers } from 'ethers';
 import { useNavigate } from 'react-router-dom';
 import LOTTERY_ABI_ARTIFACT from '../deployments/MultiTokenLottery.json';
+import { getTokenName } from '../utils/helpers';
 import "./css/AdminDashboard.css"
 
 const LOTTERY_ADDRESS = '0xB850924bd2106614F65b323EAB97cd4667426e99';
@@ -243,7 +244,6 @@ const AdminDashboard = () => {
     return null;
   }
 
-  // Add new functions for token management
   const addToken = async (e) => {
     e.preventDefault();
     if (!contract) return;
@@ -252,7 +252,7 @@ const AdminDashboard = () => {
       setLoading(true);
       const tx = await contract.addToken(
         newToken.address,
-        ethers.parseUnits(newToken.ticketPrice, 18)
+        ethers.parseUnits(newToken.ticketPrice, 6)
       );
       await tx.wait();
       setNewToken({ address: '', ticketPrice: '' });
@@ -286,9 +286,9 @@ const AdminDashboard = () => {
       setLoading(true);
       const tx = await contract.updateTicketPrice(
         tokenAddress,
-        ethers.parseUnits(newPrice, 18)
+        ethers.parseUnits(newPrice, 6)
       );
-      await tx.wait();
+       await tx.wait();
       window.location.reload();
     } catch (err) {
       setError(err.message);
@@ -297,7 +297,6 @@ const AdminDashboard = () => {
     }
   };
 
-  // Add this section before the return statement
   const renderTokenManagement = () => {
     if (!isOwner) return null;
 
@@ -346,7 +345,7 @@ const AdminDashboard = () => {
               <tbody>
                 {tokenList.map((token) => (
                   <tr key={token}>
-                    <td>{token}</td>
+                    <td>{getTokenName(token)}</td>
                     <td>
                       <span className={`status ${tokenDetails[token]?.isActive ? 'active' : 'inactive'}`}>
                         {tokenDetails[token]?.isActive ? 'Active' : 'Inactive'}
@@ -470,7 +469,7 @@ const AdminDashboard = () => {
                 <tr key={index}>
                   <td>{participant.addr}</td>
                   <td>{participant.tickets}</td>
-                  <td>{participant.tokenUsed}</td>
+                  <td>{getTokenName(participant.tokenUsed)}</td>
                 </tr>
               ))}
             </tbody>

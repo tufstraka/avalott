@@ -4,7 +4,7 @@ import "./css/ticket.css";
 import LOTTERY_ABI_ARTIFACT from '../deployments/MultiTokenLottery.json';
 import PurchaseModal from './PurchaseModal';
 import Graph from './graph';
-import AdminDashboard from './AdminDashboard';
+import { getTokenName } from '../utils/helpers';
 
 
 const LOTTERY_ABI = LOTTERY_ABI_ARTIFACT.abi;
@@ -383,7 +383,7 @@ const Ticket = () => {
         <div className="tickets-grid">
           {tokens.map((token) => (
             <div key={token} className="ticket-card">
-              <h4>{formatAddress(token)}</h4>
+              <h4>{getTokenName(token)}</h4>
               <p>Tickets: {userTickets[token] || 0}</p>
               <p>Price: {formatTokenPrice(tokenConfigs[token]?.ticketPrice || '0', token)} tokens</p>
             </div>
