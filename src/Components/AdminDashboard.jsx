@@ -3,7 +3,7 @@ import { ethers } from 'ethers';
 import { useNavigate } from 'react-router-dom';
 import "./css/AdminDashboard.css"
 
-const LOTTERY_ADDRESS = '0x21C4432DD0e56242A5aBB19b482470A7C2Bb4A0c';
+const LOTTERY_ADDRESS = '0xB850924bd2106614F65b323EAB97cd4667426e99';
 const ADMINS = [
   '0x5B058198Fc832E592edA2b749bc6e4380f4ED458',
 ];
@@ -39,6 +39,11 @@ const AdminDashboard = () => {
   const [participantData, setParticipantData] = useState([]);
   const [tokenList, setTokenList] = useState([]);
   const [connectingWallet, setConnectingWallet] = useState(false);
+  const [newToken, setNewToken] = useState({
+    address: '',
+    ticketPrice: ''
+  });
+  const [tokenDetails, setTokenDetails] = useState({});
 
 
   const connectWallet = async () => {
@@ -185,6 +190,25 @@ const AdminDashboard = () => {
     return () => clearInterval(interval);
   }, [contract, account, navigate]);
 
+  useEffect(() => {
+    const fetchTokenDetails = async () => {
+      if (!contract || !tokenList) return;
+      
+      const details = {};
+      for (const token of tokenList) {
+        const tokenConfig = await contract.supportedTokens(token);
+        details[token] = {
+          isActive: tokenConfig.isActive,
+          ticketPrice: Number(tokenConfig.ticketPrice),
+          totalTickets: Number(tokenConfig.totalTickets)
+        };
+      }
+      setTokenDetails(details);
+    };
+
+    fetchTokenDetails();
+  }, [contract, tokenList]);
+
   const startLottery = async () => {
     if (!contract) return;
     try {
@@ -230,6 +254,146 @@ const AdminDashboard = () => {
     return null;
   }
 
+  // Add new functions for token management
+  const addToken = async (e) => {
+    e.preventDefault();
+    if (!contract) return;
+    
+    try {
+      setLoading(true);
+      const tx = await contract.addToken(
+        newToken.address,
+        ethers.parseUnits(newToken.ticketPrice, 18)
+      );
+      await tx.wait();
+      setNewToken({ address: '', ticketPrice: '' });
+      window.location.reload();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const removeToken = async (tokenAddress) => {
+    if (!contract) return;
+    
+    try {
+      setLoading(true);
+      const tx = await contract.removeToken(tokenAddress);
+      await tx.wait();
+      window.location.reload();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const updateTicketPrice = async (tokenAddress, newPrice) => {
+    if (!contract) return;
+    
+    try {
+      setLoading(true);
+      const tx = await contract.updateTicketPrice(
+        tokenAddress,
+        ethers.parseUnits(newPrice, 18)
+      );
+      await tx.wait();
+      window.location.reload();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Add this section before the return statement
+  const renderTokenManagement = () => {
+    if (!isOwner) return null;
+
+    return (
+      <div className="token-management">
+        <h2>Token Management</h2>
+        
+        <div className="add-token-form">
+          <h3>Add New Token</h3>
+          <form onSubmit={addToken}>
+            <div className="form-group">
+              <input
+                type="text"
+                placeholder="Token Address"
+                value={newToken.address}
+                onChange={(e) => setNewToken({...newToken, address: e.target.value})}
+                className="input-field"
+              />
+              <input
+                type="text"
+                placeholder="Ticket Price (in token units)"
+                value={newToken.ticketPrice}
+                onChange={(e) => setNewToken({...newToken, ticketPrice: e.target.value})}
+                className="input-field"
+              />
+              <button type="submit" className="submit-button" disabled={loading}>
+                {loading ? 'Adding...' : 'Add Token'}
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <div className="token-list">
+          <h3>Supported Tokens</h3>
+          <div className="table-wrapper">
+            <table className="token-table">
+              <thead>
+                <tr>
+                  <th>Token Address</th>
+                  <th>Status</th>
+                  <th>Ticket Price</th>
+                  <th>Total Tickets</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {tokenList.map((token) => (
+                  <tr key={token}>
+                    <td>{token}</td>
+                    <td>
+                      <span className={`status ${tokenDetails[token]?.isActive ? 'active' : 'inactive'}`}>
+                        {tokenDetails[token]?.isActive ? 'Active' : 'Inactive'}
+                      </span>
+                    </td>
+                    <td>{tokenDetails[token]?.ticketPrice}</td>
+                    <td>{tokenDetails[token]?.totalTickets}</td>
+                    <td>
+                      <button
+                        className="action-button remove"
+                        onClick={() => removeToken(token)}
+                        disabled={loading}
+                      >
+                        Remove
+                      </button>
+                      <button
+                        className="action-button update"
+                        onClick={() => {
+                          const newPrice = prompt('Enter new ticket price (in token units):');
+                          if (newPrice) updateTicketPrice(token, newPrice);
+                        }}
+                        disabled={loading}
+                      >
+                        Update Price
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="admin-dashboard">
       <div className="dashboard-header">
@@ -265,6 +429,8 @@ const AdminDashboard = () => {
           </p>
         </div>
       </div>
+
+      {renderTokenManagement()}
 
       <div className="participants-table-container">
         <h2>Participant Details</h2>
