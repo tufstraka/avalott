@@ -8,7 +8,7 @@ import { ethers } from "ethers";
 import Navbar from './Components/Navbar'
 import Footer from './Components/Footer'
 import AdminDashboard from './Components/AdminDashboard'
-import LotteryWinnerPage from './Components/LotteryWinnerPage'
+
 
 import { Route, Routes } from 'react-router-dom';
 
