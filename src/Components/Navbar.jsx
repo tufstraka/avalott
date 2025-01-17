@@ -51,6 +51,8 @@ const Navbar = () => {
   const navLinks = [
     { path: '/', label: 'Home' },
     { path: '/buy-tickets', label: 'Buy Tickets' },
+    { path: '/winner', label: 'Winner' },
+
    
     { path: '/admin', label: 'admin' }
   ];
