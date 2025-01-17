@@ -1,6 +1,7 @@
 import React from "react";
 import Modal from "react-modal";
 import "./css/Modal.css";
+import { getTokenName } from "../utils/helpers";
 
 // Set app element for accessibility
 Modal.setAppElement("#root");
@@ -81,7 +82,7 @@ const PurchaseModal = ({
               <option value="">Select a token</option>
               {tokens.map((token) => (
                 <option key={token} value={token}>
-                  {formatAddress(token)}
+                  {getTokenName(token)}
                 </option>
               ))}
             </select>

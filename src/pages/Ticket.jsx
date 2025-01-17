@@ -1,14 +1,14 @@
 import { useState, useEffect } from 'react';
 import { ethers } from 'ethers';
 import "./css/ticket.css";
-import LOTTERY_ABI_ARTIFACT from './MultiTokenLottery.json';
-import PurchaseModal from './PurchaseModal';
-import Graph from './graph';
-import AdminDashboard from './AdminDashboard';
+import LOTTERY_ABI_ARTIFACT from '../deployments/MultiTokenLottery.json';
+import PurchaseModal from '../components/PurchaseModal';
+import Graph from '../Components/graph';
+import { getTokenName } from '../utils/helpers';
 
 
 const LOTTERY_ABI = LOTTERY_ABI_ARTIFACT.abi;
-const LOTTERY_ADDRESS = '0x21C4432DD0e56242A5aBB19b482470A7C2Bb4A0c';
+const LOTTERY_ADDRESS = '0xB850924bd2106614F65b323EAB97cd4667426e99';
 
 const Ticket = () => {
   // State management
@@ -383,7 +383,7 @@ const Ticket = () => {
         <div className="tickets-grid">
           {tokens.map((token) => (
             <div key={token} className="ticket-card">
-              <h4>{formatAddress(token)}</h4>
+              <h4>{getTokenName(token)}</h4>
               <p>Tickets: {userTickets[token] || 0}</p>
               <p>Price: {formatTokenPrice(tokenConfigs[token]?.ticketPrice || '0', token)} tokens</p>
             </div>

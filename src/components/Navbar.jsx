@@ -54,7 +54,7 @@ const Navbar = () => {
     { path: '/winner', label: 'Winner' },
 
    
-    { path: '/admin', label: 'admin' }
+    { path: '/admin', label: 'Admin' }
   ];
 
   return (
