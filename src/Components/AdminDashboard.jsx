@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ethers } from 'ethers';
 import { useNavigate } from 'react-router-dom';
+import LOTTERY_ABI_ARTIFACT from '../deployments/MultiTokenLottery.json';
 import "./css/AdminDashboard.css"
 
 const LOTTERY_ADDRESS = '0xB850924bd2106614F65b323EAB97cd4667426e99';
@@ -8,19 +9,7 @@ const ADMINS = [
   '0x5B058198Fc832E592edA2b749bc6e4380f4ED458',
 ];
 
-// ABI definition for required functions
-const LOTTERY_ABI = [
-  "function owner() view returns (address)",
-  "function lotteryActive() view returns (bool)",
-  "function lotteryEndTime() view returns (uint256)",
-  "function getParticipantCount() view returns (uint256)",
-  "function participants(uint256) view returns (address addr, uint256 tickets, address tokenUsed)",
-  "function getTokens() view returns (address[])",
-  "function startLottery() external",
-  "function selectWinners() external",
-  "function ticketHoldings(address, address) view returns (uint256)",
-  "function supportedTokens(address) view returns (bool isActive, uint256 ticketPrice, uint256 totalTickets)"
-];
+const LOTTERY_ABI = LOTTERY_ABI_ARTIFACT.abi;
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
@@ -394,21 +383,54 @@ const AdminDashboard = () => {
     );
   };
 
+  const selectWinners = async () => {
+    if (!contract) return;
+    try {
+      setLoading(true);
+      const tx = await contract.selectWinners();
+      await tx.wait();
+      window.location.reload();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const renderLotteryControls = () => {
+    if (!isOwner) return null;
+
+    const now = Math.floor(Date.now() / 1000);
+    const isEnded = lotteryState.isActive && now >= lotteryState.endTime;
+
+    return (
+      <div className="lottery-controls">
+        {isEnded ? (
+          <button
+            className="control-button end"
+            onClick={selectWinners}
+            disabled={loading}
+          >
+            {loading ? 'Selecting...' : 'Select Winners'}
+          </button>
+        ) : (
+          <button
+            className={`control-button ${lotteryState.isActive ? 'end' : 'start'}`}
+            onClick={lotteryState.isActive ? endLottery : startLottery}
+            disabled={loading}
+          >
+            {loading ? 'Processing...' : lotteryState.isActive ? 'End Lottery' : 'Start Lottery'}
+          </button>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="admin-dashboard">
       <div className="dashboard-header">
         <h1>Lottery Admin Dashboard</h1>
-        <div className="lottery-controls">
-          {isOwner && (
-            <button
-              className={`control-button ${lotteryState.isActive ? 'end' : 'start'}`}
-              onClick={lotteryState.isActive ? endLottery : startLottery}
-              disabled={loading}
-            >
-              {loading ? 'Processing...' : lotteryState.isActive ? 'End Lottery' : 'Start Lottery'}
-            </button>
-          )}
-        </div>
+        {renderLotteryControls()}
       </div>
 
       <div className="stats-grid">
