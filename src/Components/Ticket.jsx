@@ -8,7 +8,7 @@ import AdminDashboard from './AdminDashboard';
 
 
 const LOTTERY_ABI = LOTTERY_ABI_ARTIFACT.abi;
-const LOTTERY_ADDRESS = '0x21C4432DD0e56242A5aBB19b482470A7C2Bb4A0c';
+const LOTTERY_ADDRESS = '0xB850924bd2106614F65b323EAB97cd4667426e99';
 
 const Ticket = () => {
   // State management
