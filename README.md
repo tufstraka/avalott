@@ -76,12 +76,12 @@ Ps. Make sure you replace the contract address variable with yours
 
 | Name | Email | Github | Role |
 |------|--------|--------|------|
-| Richard Kabi | [kabirichard27@gmail.com](mailto:kabirichard27@gmail.com) | [NebulaScout](https://github.com/NebulaScout) |
-| Collins Kamau | [jbcollins254@gmail.com](mailto:jbcollins254@gmail.com) | [JBcollo1](https://github.com/JBcollo1) |
-| Aisha Barasa | [aishabarasa19@gmail.com](mailto:aishabarasa19@gmail.com) | [Aisha-Barasa](https://github.com/Aisha-Barasa) | Developer
-| Alvin Kiprotich | [alvinkiprotichkipchoge@gmail.com](mailto:alvinkiprotichkipchoge@gmail.com) | [AlvinKiprotich-dev](https://github.com/AlvinKiprotich-dev) |
+| Richard Kabi | [kabirichard27@gmail.com](mailto:kabirichard27@gmail.com) | [NebulaScout](https://github.com/NebulaScout) | developer
+| Collins Kamau | [jbcollins254@gmail.com](mailto:jbcollins254@gmail.com) | [JBcollo1](https://github.com/JBcollo1) | full stack dev
+| Aisha Barasa | [aishabarasa19@gmail.com](mailto:aishabarasa19@gmail.com) | [Aisha-Barasa](https://github.com/Aisha-Barasa) | developer
+| Alvin Kiprotich | [alvinkiprotichkipchoge@gmail.com](mailto:alvinkiprotichkipchoge@gmail.com) | [AlvinKiprotich-dev](https://github.com/AlvinKiprotich-dev) | backend dev
 | Keith Kadima | [keithkadima@gmail.com](mailto:keithkadima@gmail.com) | [tufstraka](https://github.com/tufstraka) | full stack dev
-| Jude Kimathi | [judekimathii@gmail.com](mailto:judekimathii@gmail.com) | [jxkimathi](https://github.com/jxkimathi) | Backend dev
+| Jude Kimathi | [judekimathii@gmail.com](mailto:judekimathii@gmail.com) | [jxkimathi](https://github.com/jxkimathi) | backend dev
 
 
 ## Milestones
