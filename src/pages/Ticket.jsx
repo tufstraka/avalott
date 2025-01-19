@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { ethers } from 'ethers';
 import "./css/ticket.css";
 import LOTTERY_ABI_ARTIFACT from '../deployments/MultiTokenLottery.json';
-import PurchaseModal from '../components/PurchaseModal';
+import PurchaseModal from '../Components/PurchaseModal';
 import Graph from '../Components/graph';
 import { getTokenName } from '../utils/helpers';
 
