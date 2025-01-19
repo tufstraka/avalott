@@ -105,9 +105,8 @@ npm run dev
    - ![Landing Page](https://github.com/user-attachments/assets/ba6f5807-9237-4b56-842e-4979ef8cd91f)
 
 2. **👛 Wallet Integration**
-   - Smooth MetaMask integration
-   - Real-time wallet status and balance display
-
+   - Smooth MetaMask/Core integration
+   - 
 3. **🎮 Lottery Interface**
    - Browse active lotteries and ticket options
    - User-friendly ticket purchasing system
