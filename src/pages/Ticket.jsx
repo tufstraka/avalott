@@ -300,6 +300,7 @@ const Ticket = () => {
       setTicketAmount(1);
       await updateLotteryState(contract, account);
       setIsModalOpen(false);
+      window.reload();
   
     } catch (err) {
       console.error('Transaction failed:', err);
