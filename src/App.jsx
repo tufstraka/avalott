@@ -1,9 +1,10 @@
 import './App.css'
 import Ticket from './pages/Ticket'
 import Home	 from './pages/home'
-import Navbar from './components/Navbar'
-import Footer from './components/Footer'
+import Navbar from './Components/Navbar'
+import Footer from './Components/Footer'
 import AdminDashboard from './pages/AdminDashboard'
+
 
 import { Route, Routes } from 'react-router-dom';
 
@@ -18,6 +19,8 @@ function App() {
             <Route path="/" element={<Home />} />
             <Route path="/buy-tickets" element={<Ticket />} />
             <Route path="/admin" element={<AdminDashboard />} />
+            
+
           </Routes>
         </main>
         <Footer />
