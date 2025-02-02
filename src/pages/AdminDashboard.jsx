@@ -3,307 +3,467 @@ import { ethers } from 'ethers';
 import { useNavigate } from 'react-router-dom';
 import LOTTERY_ABI_ARTIFACT from '../deployments/MultiTokenLottery.json';
 import { getTokenName } from '../utils/helpers';
-import "./css/AdminDashboard.css"
+import "./css/AdminDashboard.css";
 
-const LOTTERY_ADDRESS = '0xB850924bd2106614F65b323EAB97cd4667426e99';
+const LOTTERY_ADDRESS = '0xeADD42c14c50397E64b4dc94a4beD91175c1E011';
 const ADMINS = [
-  '0x5B058198Fc832E592edA2b749bc6e4380f4ED458',
+  '0xc283f1C9294d7A0299Cf98365687a17D671c4B60',
+  '0xA3B224A0C87fdD3FA1916E79b9B997Fa006dCDb5',
+  '0xFD3b31c1e73e896cb53d009c196F636814660ed3'
 ];
 
 const LOTTERY_ABI = LOTTERY_ABI_ARTIFACT.abi;
+const AVALANCHE_FUJI_CHAIN_ID = 43113; // Avalanche Fuji Testnet
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
-  const [error, setError] = useState(null);
-  const [contract, setContract] = useState(null);
-  const [account, setAccount] = useState(null);
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [isOwner, setIsOwner] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [state, setState] = useState({
+    error: null,
+    contract: null,
+    account: null,
+    isAdmin: false,
+    isOwner: false,
+    loading: true,
+    connectingWallet: false
+  });
+
   const [lotteryState, setLotteryState] = useState({
     isActive: false,
     participants: 0,
     totalTickets: 0,
     endTime: 0,
   });
-  const [participantData, setParticipantData] = useState([]);
-  const [tokenList, setTokenList] = useState([]);
-  const [connectingWallet, setConnectingWallet] = useState(false);
-  const [newToken, setNewToken] = useState({
-    address: '',
-    ticketPrice: ''
-  });
-  const [tokenDetails, setTokenDetails] = useState({});
 
+  const [adminState, setAdminState] = useState({
+    newAdmin: '',
+    adminList: [],
+    newDuration: '',
+    showAdminPanel: false
+  });
+
+
+  const [data, setData] = useState({
+    participantData: [],
+    tokenList: [],
+    tokenDetails: {},
+    newToken: { address: '', ticketPrice: '' }
+  });
+
+  const handleError = (error, action = '') => {
+    let message = error.message;
+    if (error.data) {
+      const decodedError = state.contract.interface.parseError(error.data);
+      message = decodedError?.args.join(' ') || error.message;
+    }
+    console.error(`Error ${action}:`, error);
+    setState(prev => ({ ...prev, error: message, loading: false }));
+  };
 
   const connectWallet = async () => {
-    if (connectingWallet) return; // Prevent multiple connection attempts
-    
+    if (state.connectingWallet) return false;
+
     try {
-      setConnectingWallet(true);
-      
+      setState(prev => ({ ...prev, connectingWallet: true }));
+
       if (!window.ethereum) {
         throw new Error('MetaMask is not installed');
       }
 
-      // First check if we're already connected
-      const accounts = await window.ethereum.request({ 
-        method: 'eth_accounts' 
-      });
-      
+      const accounts = await window.ethereum.request({ method: 'eth_accounts' });
+
       if (accounts.length === 0) {
-        // Only request access if we're not already connected
-        await window.ethereum.request({ 
-          method: 'eth_requestAccounts' 
-        });
+        await window.ethereum.request({ method: 'eth_requestAccounts' });
       }
-      
-      // Get the current account
-      const currentAccounts = await window.ethereum.request({ 
-        method: 'eth_accounts' 
-      });
-      
+
+      const currentAccounts = await window.ethereum.request({ method: 'eth_accounts' });
+
       if (currentAccounts.length === 0) {
         throw new Error('No authorized account found');
       }
 
-      const currentAccount = currentAccounts[0];
-      setAccount(currentAccount);
-
-      // Initialize provider and contract
-      const provider = new ethers.BrowserProvider(window.ethereum);
-      const signer = await provider.getSigner();
+      const provider = new ethers.providers.Web3Provider(window.ethereum);
+      const signer = provider.getSigner();
       const lotteryContract = new ethers.Contract(LOTTERY_ADDRESS, LOTTERY_ABI, signer);
-      setContract(lotteryContract);
+
+      setState(prev => ({
+        ...prev,
+        account: currentAccounts[0],
+        contract: lotteryContract,
+        connectingWallet: false
+      }));
 
       return true;
-    } catch (err) {
-      console.error('Connection error:', err);
-      setError(err.message);
+    } catch (error) {
+      handleError(error, 'connecting wallet');
       return false;
-    } finally {
-      setConnectingWallet(false);
     }
   };
-  // Initialize web3 connection and contract
+
+  const fetchTokenDecimals = async (tokenAddress) => {
+    const tokenContract = new ethers.Contract(tokenAddress, ['function decimals() view returns (uint8)'], state.contract.signer);
+    return await tokenContract.decimals();
+  };
+
+  const fetchLotteryData = async () => {
+    if (!state.contract || !state.account) return;
+
+    try {
+      setState(prev => ({ ...prev, loading: true }));
+
+      const owner = await state.contract.owner();
+      const isCurrentOwner = ethers.utils.getAddress(owner) === ethers.utils.getAddress(state.account);
+      const isCurrentAdmin = ADMINS.map(a => a.toLowerCase()).includes(state.account.toLowerCase());
+
+      if (!isCurrentOwner && !isCurrentAdmin) {
+        navigate('/');
+        return;
+      }
+
+      const [active, endTime, participantCount, tokens] = await Promise.all([
+        state.contract.lotteryActive(),
+        state.contract.lotteryEndTime(),
+        state.contract.getParticipantCount(),
+        state.contract.getTokens()
+      ]);
+
+      setLotteryState({
+        isActive: active,
+        participants: Number(participantCount),
+        endTime: Number(endTime),
+      });
+
+      setData(prev => ({ ...prev, tokenList: tokens }));
+
+      // Fetch participant details
+      const participantList = await Promise.all(
+        Array.from({ length: Number(participantCount) }, (_, i) =>
+          state.contract.participants(i)
+        )
+      );
+
+      const formattedParticipants = participantList.map(p => ({
+        addr: p.addr,
+        tickets: Number(p.tickets),
+        tokenUsed: p.tokenUsed,
+      }));
+
+      // Fetch token details
+      const tokenDetails = {};
+      await Promise.all(
+        tokens.map(async (token) => {
+          const config = await state.contract.supportedTokens(token);
+          tokenDetails[token] = {
+            isActive: config.isActive,
+            ticketPrice: Number(config.ticketPrice),
+            totalTickets: Number(config.totalTickets)
+          };
+        })
+      );
+
+      setData(prev => ({
+        ...prev,
+        participantData: formattedParticipants,
+        tokenDetails
+      }));
+
+      setState(prev => ({
+        ...prev,
+        isOwner: isCurrentOwner,
+        isAdmin: isCurrentOwner || isCurrentAdmin,
+        loading: false
+      }));
+
+    } catch (error) {
+      handleError(error, 'fetching lottery data');
+    }
+  };
+
+  const addNewAdmin = async (e) => {
+    e.preventDefault();
+    if (!ethers.utils.isAddress(adminState.newAdmin)) {
+      setState(prev => ({ ...prev, error: 'Invalid address format' }));
+      return;
+    }
+
+    await executeTransaction(
+      () => state.contract.addAdmin(adminState.newAdmin, { gasLimit: 800000 }),
+      'Admin added successfully'
+    );
+    ADMINS.push(adminState.newAdmin)
+    setAdminState(prev => ({ ...prev, newAdmin: '' }));
+    await fetchAdminList();
+  };
+
+  // Remove admin
+  const removeExistingAdmin = async (adminAddress) => {
+    await executeTransaction(
+      () => state.contract.removeAdmin(adminAddress),
+      'Admin removed successfully'
+    );
+    await fetchAdminList();
+  };
+
+  // Update lottery duration
+  const updateDuration = async (e) => {
+    e.preventDefault();
+    const duration = parseInt(adminState.newDuration);
+    if (isNaN(duration) || duration <= 0) {
+      setState(prev => ({ ...prev, error: 'Invalid duration' }));
+      return;
+    }
+
+    await executeTransaction(
+      () => state.contract.updateLotteryDuration(duration),
+      'Lottery duration updated successfully'
+    );
+    setAdminState(prev => ({ ...prev, newDuration: '' }));
+  };
+
+  // Fetch admin status
+  const fetchAdminList = async () => {
+    if (!state.contract) return;
+    
+    try {
+      const adminPromises = ADMINS.map(async (admin) => ({
+        address: admin,
+        isActive: await state.contract.isAdmin(admin)
+      }));
+      
+      const adminList = await Promise.all(adminPromises);
+      setAdminState(prev => ({ ...prev, adminList }));
+    } catch (error) {
+      handleError(error, 'fetching admin list');
+    }
+  };
+
+  // Add to useEffect
+  useEffect(() => {
+    if (state.contract && state.isOwner) {
+      fetchAdminList();
+    }
+  }, [state.contract, state.isOwner]);
+
+
   useEffect(() => {
     const init = async () => {
-      try {
-        const connected = await connectWallet();
-        
-        if (connected) {
-          // Setup event listeners only after successful connection
-          window.ethereum.on('accountsChanged', () => {
-            window.location.reload();
-          });
+      const connected = await connectWallet();
+      if (connected) {
+        const handleAccountsChanged = async (accounts) => {
+          if (accounts.length > 0) {
+            setState(prev => ({ ...prev, account: accounts[0] }));
+            await fetchLotteryData();
+          } else {
+            setState(prev => ({ ...prev, account: null }));
+          }
+        };
 
-          window.ethereum.on('chainChanged', () => {
-            window.location.reload();
-          });
+        const handleChainChanged = async (chainId) => {
+          const numericChainId = parseInt(chainId, 16);
+          if (numericChainId !== AVALANCHE_FUJI_CHAIN_ID) {
+            handleError(new Error('Please connect to the Avalanche Fuji Testnet'), 'chain change');
+          } else {
+            await connectWallet();
+          }
+        };
 
-          window.ethereum.on('disconnect', () => {
-            window.location.reload();
-          });
-        }
-      } catch (err) {
-        console.error('Initialization error:', err);
-        setError(err.message);
-      } finally {
-        setLoading(false);
+        window.ethereum.on('accountsChanged', handleAccountsChanged);
+        window.ethereum.on('chainChanged', handleChainChanged);
+        window.ethereum.on('disconnect', handleAccountsChanged);
+
+        return () => {
+          window.ethereum.removeListener('accountsChanged', handleAccountsChanged);
+          window.ethereum.removeListener('chainChanged', handleChainChanged);
+          window.ethereum.removeListener('disconnect', handleAccountsChanged);
+        };
       }
     };
 
     init();
-
-    return () => {
-      if (window.ethereum) {
-        window.ethereum.removeAllListeners();
-      }
-    };
   }, []);
 
-  // Check admin status and fetch data
   useEffect(() => {
-    const checkAdminAndFetchData = async () => {
-      if (!contract || !account) return;
+    if (state.contract && state.account) {
+      fetchLotteryData();
+      const interval = setInterval(fetchLotteryData, 30000);
+      return () => clearInterval(interval);
+    }
+  }, [state.contract, state.account]);
 
-      try {
-        const owner = await contract.owner();
-        const isCurrentOwner = owner.toLowerCase() === account.toLowerCase();
-        const isCurrentAdmin = ADMINS.map(a => a.toLowerCase()).includes(account.toLowerCase());
-
-        setIsOwner(isCurrentOwner);
-        setIsAdmin(isCurrentOwner || isCurrentAdmin);
-
-        if (!isCurrentOwner && !isCurrentAdmin) {
-          navigate('/');
-          return;
-        }
-
-        // Fetch lottery state
-        const [active, endTime, participantCount, tokens] = await Promise.all([
-          contract.lotteryActive(),
-          contract.lotteryEndTime(),
-          contract.getParticipantCount(),
-          contract.getTokens()
-        ]);
-
-        setLotteryState({
-          isActive: active,
-          participants: Number(participantCount), // Convert BigInt to Number
-          endTime: Number(endTime), // Convert BigInt to Number
-        });
-
-        setTokenList(tokens);
-
-        // Fetch participant details
-        const participantList = [];
-        for (let i = 0; i < Number(participantCount); i++) {
-          const participant = await contract.participants(i);
-          participantList.push({
-            addr: participant.addr,
-            tickets: Number(participant.tickets), // Convert BigInt to Number
-            tokenUsed: participant.tokenUsed,
-          });
-        }
-        setParticipantData(participantList);
-
-      } catch (err) {
-        setError(err.message);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    checkAdminAndFetchData();
-    const interval = setInterval(checkAdminAndFetchData, 30000);
-    return () => clearInterval(interval);
-  }, [contract, account, navigate]);
-
-  useEffect(() => {
-    const fetchTokenDetails = async () => {
-      if (!contract || !tokenList) return;
-      
-      const details = {};
-      for (const token of tokenList) {
-        const tokenConfig = await contract.supportedTokens(token);
-        details[token] = {
-          isActive: tokenConfig.isActive,
-          ticketPrice: Number(tokenConfig.ticketPrice),
-          totalTickets: Number(tokenConfig.totalTickets)
-        };
-      }
-      setTokenDetails(details);
-    };
-
-    fetchTokenDetails();
-  }, [contract, tokenList]);
-
-  const startLottery = async () => {
-    if (!contract) return;
+  const executeTransaction = async (transaction, successMessage = '') => {
     try {
-      setLoading(true);
-      const tx = await contract.startLottery();
+      setState(prev => ({ ...prev, loading: true }));
+      const tx = await transaction();
       await tx.wait();
-      window.location.reload();
-    } catch (err) {
-      setError(err.message);
+      await fetchLotteryData();
+      if (successMessage) alert(successMessage);
+    } catch (error) {
+      handleError(error);
     } finally {
-      setLoading(false);
+      setState(prev => ({ ...prev, loading: false }));
     }
   };
 
-  const endLottery = async () => {
-    if (!contract) return;
-    try {
-      setLoading(true);
-      const tx = await contract.selectWinners();
-      await tx.wait();
-      window.location.reload();
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const startLottery = () => executeTransaction(
+    () => state.contract.startLottery({ gasLimit: 800000 }),
+    'Lottery started successfully'
+  );
 
-  if (error) {
-    return (
-      <div className="error-container">
-        <h2>Error</h2>
-        <p>{error}</p>
-      </div>
-    );
-  }
-
-  if (loading) {
-    return <div className="loading">Loading admin dashboard...</div>;
-  }
-
-  if (!isAdmin && !isOwner) {
-    return null;
-  }
+  const endLottery = () => executeTransaction(
+    () => state.contract.selectWinners({ gasLimit: 800000 }),
+    'Lottery ended successfully'
+  );
 
   const addToken = async (e) => {
     e.preventDefault();
-    if (!contract) return;
-    
     try {
-      setLoading(true);
-      const tx = await contract.addToken(
-        newToken.address,
-        ethers.parseUnits(newToken.ticketPrice, 6)
-      );
-      await tx.wait();
-      setNewToken({ address: '', ticketPrice: '' });
-      window.location.reload();
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
+      const code = await state.contract.provider.getCode(data.newToken.address);
+      if (code === '0x') throw new Error('Invalid contract address');
 
-  const removeToken = async (tokenAddress) => {
-    if (!contract) return;
-    
-    try {
-      setLoading(true);
-      const tx = await contract.removeToken(tokenAddress);
-      await tx.wait();
-      window.location.reload();
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
+      const decimals = await fetchTokenDecimals(data.newToken.address);
+      await executeTransaction(
+        () => state.contract.addToken(
+          data.newToken.address,
+          ethers.utils.parseUnits(data.newToken.ticketPrice, decimals)
+        ),
+        'Token added successfully'
+      );
+      setData(prev => ({ ...prev, newToken: { address: '', ticketPrice: '' } }));
+    } catch (error) {
+      handleError(error, 'adding token');
     }
   };
 
   const updateTicketPrice = async (tokenAddress, newPrice) => {
-    if (!contract) return;
-    
     try {
-      setLoading(true);
-      const tx = await contract.updateTicketPrice(
-        tokenAddress,
-        ethers.parseUnits(newPrice, 6)
+      const decimals = await fetchTokenDecimals(tokenAddress);
+      console.log(decimals)
+      const parsedPrice = ethers.utils.parseUnits(newPrice.toString(), decimals);
+      console.log(`Updating price with value: ${parsedPrice.toString()}`);
+  
+      await executeTransaction(
+        () => state.contract.updateTicketPrice(tokenAddress, parsedPrice, { gasLimit: 800000 }),
+        'Ticket price updated successfully'
       );
-       await tx.wait();
-      window.location.reload();
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
+    } catch (error) {
+      handleError(error);
     }
   };
 
+  const removeToken = (tokenAddress) => executeTransaction(
+    () => state.contract.removeToken(tokenAddress),
+    'Token removed successfully'
+  );
+
+  if (state.error) {
+    return (
+      <div className="error-container">
+        <h2>Error</h2>
+        <p>{state.error}</p>
+        <button onClick={() => setState(prev => ({ ...prev, error: null }))}>Dismiss</button>
+      </div>
+    );
+  }
+
+  if (state.loading) {
+    return <div className="loading">Loading admin dashboard...</div>;
+  }
+
+  if (!state.isAdmin && !state.isOwner) {
+    return null;
+  }
+
+  const renderAdminPanel = () => {
+    if (!state.isOwner) return null;
+
+    return (
+      <div className="admin-panel">
+        <div className="panel-header">
+          <h2>Admin Management</h2>
+          <button 
+            className="toggle-button"
+            onClick={() => setAdminState(prev => ({ 
+              ...prev, 
+              showAdminPanel: !prev.showAdminPanel 
+            }))}
+          >
+            {adminState.showAdminPanel ? 'Hide' : 'Show'} Admin Panel
+          </button>
+        </div>
+
+        {adminState.showAdminPanel && (
+          <div className="admin-controls">
+            <div className="admin-section">
+              <h3>Add New Admin</h3>
+              <form onSubmit={addNewAdmin} className="admin-form">
+                <input
+                  type="text"
+                  placeholder="Admin Address"
+                  value={adminState.newAdmin}
+                  onChange={(e) => setAdminState(prev => ({
+                    ...prev,
+                    newAdmin: e.target.value
+                  }))}
+                  className="input-field"
+                />
+                <button type="submit" className="submit-button">
+                  Add Admin
+                </button>
+              </form>
+            </div>
+
+            <div className="admin-section">
+              <h3>Update Lottery Duration</h3>
+              <form onSubmit={updateDuration} className="admin-form">
+                <input
+                  type="number"
+                  placeholder="Duration in seconds"
+                  value={adminState.newDuration}
+                  onChange={(e) => setAdminState(prev => ({
+                    ...prev,
+                    newDuration: e.target.value
+                  }))}
+                  className="input-field"
+                />
+                <button type="submit" className="submit-button">
+                  Update Duration
+                </button>
+              </form>
+            </div>
+
+            <div className="admin-section">
+              <h3>Current Admins</h3>
+              <div className="admin-list">
+                {adminState.adminList.map((admin, index) => (
+                  <div key={index} className="admin-item">
+                    <span className="admin-address">{admin.address}</span>
+                    <span className={`admin-status ${admin.isActive ? 'active' : 'inactive'}`}>
+                      {admin.isActive ? 'Active' : 'Inactive'}
+                    </span>
+                    {admin.isActive && (
+                      <button
+                        className="action-button remove"
+                        onClick={() => removeExistingAdmin(admin.address)}
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   const renderTokenManagement = () => {
-    if (!isOwner) return null;
+    if (!state.isAdmin) return null;
 
     return (
       <div className="token-management">
         <h2>Token Management</h2>
-        
+
         <div className="add-token-form">
           <h3>Add New Token</h3>
           <form onSubmit={addToken}>
@@ -311,19 +471,25 @@ const AdminDashboard = () => {
               <input
                 type="text"
                 placeholder="Token Address"
-                value={newToken.address}
-                onChange={(e) => setNewToken({...newToken, address: e.target.value})}
+                value={data.newToken.address}
+                onChange={(e) => setData(prev => ({
+                  ...prev,
+                  newToken: { ...prev.newToken, address: e.target.value }
+                }))}
                 className="input-field"
               />
               <input
                 type="text"
                 placeholder="Ticket Price (in token units)"
-                value={newToken.ticketPrice}
-                onChange={(e) => setNewToken({...newToken, ticketPrice: e.target.value})}
+                value={data.newToken.ticketPrice}
+                onChange={(e) => setData(prev => ({
+                  ...prev,
+                  newToken: { ...prev.newToken, ticketPrice: e.target.value }
+                }))}
                 className="input-field"
               />
-              <button type="submit" className="submit-button" disabled={loading}>
-                {loading ? 'Adding...' : 'Add Token'}
+              <button type="submit" className="submit-button" disabled={state.loading}>
+                {state.loading ? 'Adding...' : 'Add Token'}
               </button>
             </div>
           </form>
@@ -343,21 +509,21 @@ const AdminDashboard = () => {
                 </tr>
               </thead>
               <tbody>
-                {tokenList.map((token) => (
+                {data.tokenList.map((token) => (
                   <tr key={token}>
                     <td>{getTokenName(token)}</td>
                     <td>
-                      <span className={`status ${tokenDetails[token]?.isActive ? 'active' : 'inactive'}`}>
-                        {tokenDetails[token]?.isActive ? 'Active' : 'Inactive'}
+                      <span className={`status ${data.tokenDetails[token]?.isActive ? 'active' : 'inactive'}`}>
+                        {data.tokenDetails[token]?.isActive ? 'Active' : 'Inactive'}
                       </span>
                     </td>
-                    <td>{tokenDetails[token]?.ticketPrice}</td>
-                    <td>{tokenDetails[token]?.totalTickets}</td>
+                    <td>{data.tokenDetails[token]?.ticketPrice}</td>
+                    <td>{data.tokenDetails[token]?.totalTickets}</td>
                     <td>
                       <button
                         className="action-button remove"
                         onClick={() => removeToken(token)}
-                        disabled={loading}
+                        disabled={state.loading}
                       >
                         Remove
                       </button>
@@ -365,9 +531,13 @@ const AdminDashboard = () => {
                         className="action-button update"
                         onClick={() => {
                           const newPrice = prompt('Enter new ticket price (in token units):');
-                          if (newPrice) updateTicketPrice(token, newPrice);
+                          if (!newPrice || isNaN(newPrice) || Number(newPrice) <= 0) {
+                            alert('Please enter a valid nonzero number for the ticket price.');
+                            return;
+                          }
+                          updateTicketPrice(token, newPrice);
                         }}
-                        disabled={loading}
+                        disabled={state.loading}
                       >
                         Update Price
                       </button>
@@ -382,45 +552,23 @@ const AdminDashboard = () => {
     );
   };
 
-  const selectWinners = async () => {
-    if (!contract) return;
-    try {
-      setLoading(true);
-      const tx = await contract.selectWinners();
-      await tx.wait();
-      window.location.reload();
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const renderLotteryControls = () => {
-    if (!isOwner) return null;
+    if (!state.isAdmin) return null;
 
     const now = Math.floor(Date.now() / 1000);
     const isEnded = lotteryState.isActive && now >= lotteryState.endTime;
 
     return (
       <div className="lottery-controls">
-        {isEnded ? (
-          <button
-            className="control-button end"
-            onClick={selectWinners}
-            disabled={loading}
-          >
-            {loading ? 'Selecting...' : 'Select Winners'}
-          </button>
-        ) : (
-          <button
-            className={`control-button ${lotteryState.isActive ? 'end' : 'start'}`}
-            onClick={lotteryState.isActive ? endLottery : startLottery}
-            disabled={loading}
-          >
-            {loading ? 'Processing...' : lotteryState.isActive ? 'End Lottery' : 'Start Lottery'}
-          </button>
-        )}
+        <button
+          className={`control-button ${isEnded ? 'end' : lotteryState.isActive ? 'end' : 'start'}`}
+          onClick={isEnded ? endLottery : lotteryState.isActive ? endLottery : startLottery}
+          disabled={state.loading || data.tokenList.length === 0}
+        >
+          {state.loading ? 'Processing...' :
+            isEnded ? 'Select Winners' :
+              lotteryState.isActive ? 'End Lottery' : 'Start Lottery'}
+        </button>
       </div>
     );
   };
@@ -431,6 +579,9 @@ const AdminDashboard = () => {
         <h1>Lottery Admin Dashboard</h1>
         {renderLotteryControls()}
       </div>
+
+      {renderAdminPanel()}
+
 
       <div className="stats-grid">
         <div className="stat-card">
@@ -465,7 +616,7 @@ const AdminDashboard = () => {
               </tr>
             </thead>
             <tbody>
-              {participantData.map((participant, index) => (
+              {data.participantData.map((participant, index) => (
                 <tr key={index}>
                   <td>{participant.addr}</td>
                   <td>{participant.tickets}</td>
