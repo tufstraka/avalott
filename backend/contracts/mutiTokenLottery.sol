@@ -24,6 +24,8 @@ contract MultiTokenLottery is ReentrancyGuard, Ownable {
     
     mapping(address => TokenConfig) public supportedTokens;
     mapping(address => mapping(address => uint256)) public ticketHoldings;
+    mapping(address => bool) public admins;
+
     
     Participant[] public participants;
     address[] public tokenList;
@@ -45,6 +47,9 @@ contract MultiTokenLottery is ReentrancyGuard, Ownable {
    //error CannotUpdateDuringLottery();
     error InvalidTicketAmount();
     error InvalidDuration();
+    error Unauthorized();
+    error AdminAlreadyExists(address admin);
+    error AdminDoesNotExist(address admin);
     
     event TokenAdded(address indexed token, uint256 ticketPrice);
     event TokenRemoved(address indexed token);
@@ -54,13 +59,20 @@ contract MultiTokenLottery is ReentrancyGuard, Ownable {
     event LotteryCompleted();
     event TicketPriceUpdated(address indexed token, uint256 newPrice);
     event DurationUpdated(uint256 newDuration);
+    event AdminAdded(address indexed admin);
+    event AdminRemoved(address indexed admin);
     
     constructor(uint256 _lotteryDuration) Ownable(msg.sender) {
         if (_lotteryDuration == 0) revert InvalidDuration();
         lotteryDuration = _lotteryDuration;
     }
+
+    modifier onlyAdminOrOwner() {
+        if (msg.sender != owner() && !admins[msg.sender]) revert Unauthorized();
+        _;
+    }
     
-    function addToken(address _token, uint256 _ticketPrice) external onlyOwner {
+    function addToken(address _token, uint256 _ticketPrice) external onlyAdminOrOwner() {
         if (_token == address(0)) revert InvalidTokenAddress(_token);
         if (_ticketPrice == 0) revert InvalidTicketAmount();
         if (supportedTokens[_token].isActive) revert TokenAlreadySupported(_token);
@@ -74,8 +86,24 @@ contract MultiTokenLottery is ReentrancyGuard, Ownable {
         
         emit TokenAdded(_token, _ticketPrice);
     }
+
+    function addAdmin(address _admin) external onlyOwner {
+        if (admins[_admin]) revert AdminAlreadyExists(_admin);
+        admins[_admin] = true;
+        emit AdminAdded(_admin);
+    }
     
-    function removeToken(address _token) external onlyOwner {
+    function removeAdmin(address _admin) external onlyOwner {
+        if (!admins[_admin]) revert AdminDoesNotExist(_admin);
+        delete admins[_admin];
+        emit AdminRemoved(_admin);
+    }
+    
+    function isAdmin(address _admin) external view returns (bool) {
+        return admins[_admin];
+    }
+    
+    function removeToken(address _token) external onlyAdminOrOwner() {
         if (!supportedTokens[_token].isActive) revert TokenNotSupported(_token);
         if (lotteryActive) revert LotteryAlreadyActive();
         
@@ -92,7 +120,7 @@ contract MultiTokenLottery is ReentrancyGuard, Ownable {
         emit TokenRemoved(_token);
     }
     
-    function startLottery() external onlyOwner {
+    function startLottery() external onlyAdminOrOwner() {
         if (lotteryActive) revert LotteryAlreadyActive();
         if (tokenList.length == 0) revert NoTokensConfigured();
         
@@ -148,7 +176,7 @@ contract MultiTokenLottery is ReentrancyGuard, Ownable {
         supportedTokens[_token].totalTickets += _amount;
     }
     
-    function selectWinners() external onlyOwner {
+    function selectWinners() external onlyAdminOrOwner() {
         if (!lotteryActive) revert LotteryNotActive();
         if (block.timestamp < lotteryEndTime) {
             revert LotteryStillOngoing(block.timestamp, lotteryEndTime);
@@ -229,7 +257,7 @@ contract MultiTokenLottery is ReentrancyGuard, Ownable {
         return participants.length;
     }
     
-    function updateTicketPrice(address _token, uint256 _newPrice) external onlyOwner {
+    function updateTicketPrice(address _token, uint256 _newPrice) external onlyAdminOrOwner() {
         if (_newPrice == 0) revert InvalidTicketAmount();
         if (!supportedTokens[_token].isActive) revert TokenNotSupported(_token);
         //if (lotteryActive) revert CannotUpdateDuringLottery();
@@ -238,7 +266,7 @@ contract MultiTokenLottery is ReentrancyGuard, Ownable {
         emit TicketPriceUpdated(_token, _newPrice);
     }
     
-    function updateLotteryDuration(uint256 _newDuration) external onlyOwner {
+    function updateLotteryDuration(uint256 _newDuration) external onlyAdminOrOwner() {
         if (_newDuration == 0) revert InvalidDuration();
         //if (lotteryActive) revert CannotUpdateDuringLottery();
         
