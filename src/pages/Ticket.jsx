@@ -2,8 +2,8 @@ import { useState, useEffect } from 'react';
 import { ethers } from 'ethers';
 import "./css/ticket.css";
 import LOTTERY_ABI_ARTIFACT from '../deployments/MultiTokenLottery.json';
-import PurchaseModal from '../Components/PurchaseModal';
-import Graph from '../Components/graph';
+import PurchaseModal from '../components/PurchaseModal';
+import Graph from '../components/graph';
 import { getTokenName } from '../utils/helpers';
 
 const LOTTERY_ABI = LOTTERY_ABI_ARTIFACT.abi;
@@ -107,7 +107,7 @@ const Ticket = () => {
       }
 
       setGraphData({
-        //labels: availableTokens.map(getTokenName),
+        labels: availableTokens.map(getTokenName),
         values: availableTokens.map(token => tickets[token] || 0)
       });
 
@@ -122,7 +122,7 @@ const Ticket = () => {
   useEffect(() => {
     const init = async () => {
       if (typeof window.ethereum === 'undefined') {
-        setError('Please install MetaMask');
+        setError('Please install MetaMask / Core');
         return;
       }
 
@@ -315,15 +315,6 @@ const Ticket = () => {
           </div>
         )}
 
-        {!account && (
-          <button 
-            className="connect-button"
-            onClick={connectWallet}
-            disabled={loading}
-          >
-            Connect Wallet
-          </button>
-        )}
 
         {graphData && (
           <div className="graph-container">
