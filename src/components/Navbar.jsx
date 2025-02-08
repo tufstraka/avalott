@@ -59,7 +59,7 @@ const Navbar = () => {
     <header className="header">
       <div className="header-content">
         <Link to="/" className="logo">
-          <h1>Lottery-DAO</h1>
+          <h1>Avalot</h1>
         </Link>
 
         {/* Mobile menu button */}

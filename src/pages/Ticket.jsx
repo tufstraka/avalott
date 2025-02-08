@@ -42,7 +42,20 @@ const Ticket = () => {
 
   const handleError = (err, message) => {
     console.error(message, err);
-    setError(`${message}: ${err.message}`);
+    let userMessage = message;
+    
+    // Convert technical errors to user-friendly messages
+    if (err.message.includes('unknown account #0')) {
+      userMessage = 'Please connect your wallet to continue';
+    } else if (err.code === 4902) {
+      userMessage = 'Please add Avalanche Fuji network to your wallet';
+    } else if (err.message.includes('user rejected')) {
+      userMessage = 'Transaction was cancelled';
+    } else if (err.message.includes('insufficient funds')) {
+      userMessage = 'Insufficient balance to complete the transaction';
+    }
+    
+    setError(userMessage);
     setLoading(false);
   };
 
@@ -191,14 +204,21 @@ const Ticket = () => {
         }
 
         const signer = walletProvider.getSigner();
+        const address = await signer.getAddress();
+        
+        if (!address) {
+          return; // Exit if no address is available
+        }
+
         const newContract = new ethers.Contract(LOTTERY_ADDRESS, LOTTERY_ABI, signer);
         setContract(newContract);
-
-        const address = await signer.getAddress();
         setAccount(address);
 
         await updateLotteryState(newContract, address, signer);
       } catch (err) {
+        if (err.message.includes('unknown account #0')) {
+          return; // Silently return if wallet is not connected
+        }
         handleError(err, 'Failed to initialize');
       }
     };
@@ -214,7 +234,8 @@ const Ticket = () => {
     const handleAccountsChanged = async (accounts) => {
       if (accounts.length > 0) {
         try {
-          const signer = provider?.getSigner();
+          const walletProvider = new ethers.providers.Web3Provider(provider);
+          const signer = walletProvider.getSigner();
           if (signer && contract) {
             const newContract = contract.connect(signer);
             setContract(newContract);
