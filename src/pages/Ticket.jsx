@@ -20,6 +20,13 @@ const AVALANCHE_TESTNET_PARAMS = {
   blockExplorerUrls: ['https://testnet.snowtrace.io/']
 };
 
+const ERC20_ABI = [
+  'function decimals() view returns (uint8)',
+  'function approve(address spender, uint256 amount) returns (bool)',
+  'function allowance(address owner, address spender) view returns (uint256)',
+  'function balanceOf(address account) view returns (uint256)'
+];
+
 const Ticket = () => {
   const [provider, setProvider] = useState(null);
   const [contract, setContract] = useState(null);
@@ -38,82 +45,106 @@ const Ticket = () => {
   const [ticketAmount, setTicketAmount] = useState(1);
   const [selectedToken, setSelectedToken] = useState("");
   const [graphData, setGraphData] = useState(null);
-  const [walletType, setWalletType] = useState(null);
 
-  const handleError = (err, message) => {
-    console.error(message, err);
-    let userMessage = message;
+  const handleError = (err) => {
+    console.error('Error:', err);
+    let userMessage = 'An error occurred';
     
-    // Convert technical errors to user-friendly messages
-    if (err.message.includes('unknown account #0')) {
-      userMessage = 'Please connect your wallet to continue';
-    } else if (err.code === 4902) {
-      userMessage = 'Please add Avalanche Fuji network to your wallet';
-    } else if (err.message.includes('user rejected')) {
-      userMessage = 'Transaction was cancelled';
-    } else if (err.message.includes('insufficient funds')) {
-      userMessage = 'Insufficient balance to complete the transaction';
+    if (err.code === 4001) {
+      userMessage = 'Transaction rejected by user';
+    } else if (err.code === -32603) {
+      userMessage = 'Internal JSON-RPC error';
+    } else if (err.message?.includes('insufficient funds')) {
+      userMessage = 'Insufficient balance';
+    } else if (err.message?.includes('user rejected')) {
+      userMessage = 'Action cancelled by user';
     }
     
     setError(userMessage);
     setLoading(false);
   };
 
-  const switchToAvalancheFuji = async () => {
+  const connectWallet = async () => {
+    try {
+      if (!window.ethereum) {
+        throw new Error('Please install MetaMask');
+      }
+
+      setLoading(true);
+      const accounts = await window.ethereum.request({
+        method: 'eth_requestAccounts'
+      });
+      
+      if (accounts.length === 0) {
+        throw new Error('No accounts found');
+      }
+
+      const web3Provider = new ethers.providers.Web3Provider(window.ethereum);
+      const network = await web3Provider.getNetwork();
+      
+      if (network.chainId !== parseInt(AVALANCHE_TESTNET_PARAMS.chainId, 16)) {
+        await switchNetwork();
+      }
+
+      setProvider(web3Provider);
+      setAccount(accounts[0]);
+      
+      const signer = web3Provider.getSigner();
+      const lotteryContract = new ethers.Contract(LOTTERY_ADDRESS, LOTTERY_ABI, signer);
+      setContract(lotteryContract);
+
+      return { signer, lotteryContract, account: accounts[0] };
+    } catch (err) {
+      handleError(err);
+      return null;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const switchNetwork = async () => {
     try {
       await window.ethereum.request({
         method: 'wallet_switchEthereumChain',
         params: [{ chainId: AVALANCHE_TESTNET_PARAMS.chainId }],
       });
-    } catch (switchError) {
-      if (switchError.code === 4902) {
+    } catch (err) {
+      if (err.code === 4902) {
         try {
           await window.ethereum.request({
             method: 'wallet_addEthereumChain',
             params: [AVALANCHE_TESTNET_PARAMS],
           });
-        } catch (addError) {
-          handleError(addError, 'Failed to add Avalanche Fuji network');
+        } catch (addErr) {
+          handleError(addErr);
         }
       } else {
-        handleError(switchError, 'Failed to switch to Avalanche Fuji network');
+        handleError(err);
       }
     }
   };
 
-  const checkAndHandleNetwork = async () => {
-    if (!provider) return;
-    
-    const network = await provider.getNetwork();
-    if (network.chainId !== parseInt(AVALANCHE_TESTNET_PARAMS.chainId, 16)) {
-      setError('Please switch to Avalanche Fuji Testnet');
-      await switchToAvalancheFuji();
-    }
-  };
-
-  const updateLotteryState = async (contractInstance, userAccount, signer) => {
-    if (!contractInstance || !userAccount || !signer) return;
+  const updateLotteryState = async () => {
+    if (!contract || !account) return;
 
     try {
       setLoading(true);
-      console.log('Updating lottery state...');
+      
+      const [active, endTime, participantCount, availableTokens] = await Promise.all([
+        contract.lotteryActive(),
+        contract.lotteryEndTime(),
+        contract.getParticipantCount(),
+        contract.getTokens()
+      ].map(p => p.catch(e => null)));
 
-      const [
-        active,
-        endTime,
-        participantCount,
-        availableTokens
-      ] = await Promise.all([
-        contractInstance.lotteryActive(),
-        contractInstance.lotteryEndTime(),
-        contractInstance.getParticipantCount(),
-        contractInstance.getTokens()
-      ]);
+      if (!active || !endTime || !participantCount || !availableTokens) {
+        throw new Error('Failed to fetch lottery state');
+      }
 
       setLotteryState({
         isActive: active,
-        endTime: Number(endTime),
-        participants: Number(participantCount)
+        endTime: endTime.toNumber(),
+        participants: participantCount.toNumber()
       });
 
       setTokens(availableTokens);
@@ -123,26 +154,22 @@ const Ticket = () => {
 
       for (const token of availableTokens) {
         try {
-          const tokenContract = new ethers.Contract(
-            token,
-            ['function decimals() view returns (uint8)'],
-            signer
-          );
-
+          const tokenContract = new ethers.Contract(token, ERC20_ABI, provider.getSigner());
+          
           const [config, userTicketCount, decimals] = await Promise.all([
-            contractInstance.supportedTokens(token),
-            contractInstance.ticketHoldings(token, userAccount),
+            contract.supportedTokens(token),
+            contract.ticketHoldings(token, account),
             tokenContract.decimals()
           ]);
 
           configs[token] = {
             isActive: config.isActive,
             ticketPrice: config.ticketPrice.toString(),
-            totalTickets: Number(config.totalTickets),
-            decimals: decimals
+            totalTickets: config.totalTickets.toNumber(),
+            decimals
           };
 
-          tickets[token] = Number(userTicketCount);
+          tickets[token] = userTicketCount.toNumber();
         } catch (err) {
           console.error(`Error loading token ${token}:`, err);
           configs[token] = {
@@ -154,7 +181,7 @@ const Ticket = () => {
           tickets[token] = 0;
         }
       }
-      
+
       setTokenConfigs(configs);
       setUserTickets(tickets);
 
@@ -165,178 +192,102 @@ const Ticket = () => {
       setGraphData({
         values: availableTokens.map(token => tickets[token] || 0)
       });
-
     } catch (err) {
-      handleError(err, 'Failed to update lottery state');
+      handleError(err);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    const detectWallet = async () => {
-      if (typeof window.ethereum !== 'undefined') {
-        setWalletType('metamask');
-        await checkAndHandleNetwork();
-      } else if (typeof window.core !== 'undefined') {
-        setWalletType('core');
-      } else {
-        setError('Please install Core Wallet or MetaMask');
-      }
-    };
-
-    detectWallet();
-  }, []);
-
-  useEffect(() => {
     const init = async () => {
-      if (!walletType) return;
-
-      try {
-        const walletProvider = walletType === 'core' 
-          ? new ethers.providers.Web3Provider(window.core)
-          : new ethers.providers.Web3Provider(window.ethereum);
-        
-        setProvider(walletProvider);
-
-        if (walletType === 'metamask') {
-          await checkAndHandleNetwork();
-        }
-
-        const signer = walletProvider.getSigner();
-        const address = await signer.getAddress();
-        
-        if (!address) {
-          return; // Exit if no address is available
-        }
-
-        const newContract = new ethers.Contract(LOTTERY_ADDRESS, LOTTERY_ABI, signer);
-        setContract(newContract);
-        setAccount(address);
-
-        await updateLotteryState(newContract, address, signer);
-      } catch (err) {
-        if (err.message.includes('unknown account #0')) {
-          return; // Silently return if wallet is not connected
-        }
-        handleError(err, 'Failed to initialize');
+      const connection = await connectWallet();
+      if (connection) {
+        await updateLotteryState();
       }
     };
 
     init();
-  }, [walletType]);
 
-  useEffect(() => {
-    if (!window.ethereum && !window.core) return;
-
-    const provider = window.ethereum || window.core;
-
-    const handleAccountsChanged = async (accounts) => {
-      if (accounts.length > 0) {
-        try {
-          const walletProvider = new ethers.providers.Web3Provider(provider);
-          const signer = walletProvider.getSigner();
-          if (signer && contract) {
-            const newContract = contract.connect(signer);
-            setContract(newContract);
-            setAccount(accounts[0]);
-            await updateLotteryState(newContract, accounts[0], signer);
-          }
-        } catch (err) {
-          handleError(err, 'Failed to update account');
+    if (window.ethereum) {
+      window.ethereum.on('accountsChanged', async (accounts) => {
+        if (accounts.length > 0) {
+          await connectWallet();
+        } else {
+          setAccount('');
+          setUserTickets({});
         }
-      } else {
-        setAccount('');
-        setUserTickets({});
-      }
-    };
+      });
 
-    provider.on('accountsChanged', handleAccountsChanged);
-    provider.on('chainChanged', () => window.location.reload());
+      window.ethereum.on('chainChanged', () => {
+        window.location.reload();
+      });
 
-    return () => {
-      provider.removeListener('accountsChanged', handleAccountsChanged);
-      provider.removeListener('chainChanged', () => {});
-    };
-  }, [provider, contract]);
+      return () => {
+        window.ethereum.removeAllListeners('accountsChanged');
+        window.ethereum.removeAllListeners('chainChanged');
+      };
+    }
+  }, []);
 
   const buyTickets = async () => {
     if (!contract || !selectedToken || !ticketAmount || !tokenConfigs[selectedToken]) {
-      setError('Invalid selection or missing data');
+      setError('Invalid selection');
       return;
     }
-  
-    if (typeof ticketAmount !== 'number' || ticketAmount <= 0) {
-      setError('Please enter a valid number of tickets.');
-      return;
-    }
-  
-    setLoading(true);
-    setError('');
-  
-    try {
-      const signer = provider?.getSigner();
-      if (!signer) throw new Error('No signer available');
 
-      const connectedContract = contract.connect(signer);
-  
+    if (ticketAmount <= 0) {
+      setError('Invalid ticket amount');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError('');
+
       if (!lotteryState.isActive) {
         throw new Error('Lottery is not active');
       }
-  
+
       if (Date.now() / 1000 > lotteryState.endTime) {
         throw new Error('Lottery has ended');
       }
-  
+
       const tokenContract = new ethers.Contract(
         selectedToken,
-        [
-          'function approve(address spender, uint256 amount) returns (bool)',
-          'function allowance(address owner, address spender) view returns (uint256)',
-          'function balanceOf(address account) view returns (uint256)',
-          'function decimals() view returns (uint8)'
-        ],
-        signer
+        ERC20_ABI,
+        provider.getSigner()
       );
-  
+
       const tokenConfig = tokenConfigs[selectedToken];
-      const ticketPriceWei = ethers.BigNumber.from(tokenConfig.ticketPrice);
-      const ticketAmountBigInt = ethers.BigNumber.from(ticketAmount);
-      const totalCostWei = ticketPriceWei.mul(ticketAmountBigInt);
-  
-      const balance = await tokenContract.balanceOf(await signer.getAddress());
-      
-      if (balance.lt(totalCostWei)) {
+      const ticketPrice = ethers.BigNumber.from(tokenConfig.ticketPrice);
+      const amount = ethers.BigNumber.from(ticketAmount);
+      const totalCost = ticketPrice.mul(amount);
+
+      // Check balance
+      const balance = await tokenContract.balanceOf(account);
+      if (balance.lt(totalCost)) {
         throw new Error('Insufficient token balance');
       }
-  
-      const allowance = await tokenContract.allowance(
-        await signer.getAddress(),
-        contract.address
-      );
-  
-      if (allowance.lt(totalCostWei)) {
-        const approveTx = await tokenContract.approve(
-          contract.address,
-          totalCostWei,
-          { gasLimit: 100000 }
-        );
+
+      // Check and set allowance
+      const allowance = await tokenContract.allowance(account, LOTTERY_ADDRESS);
+      if (allowance.lt(totalCost)) {
+        const approveTx = await tokenContract.approve(LOTTERY_ADDRESS, totalCost);
         await approveTx.wait();
       }
-  
-      const tx = await connectedContract.buyTickets(
-        selectedToken,
-        ticketAmount,
-        { gasLimit: 300000 }
-      );
-  
-      await tx.wait();
-  
+
+      // Buy tickets
+      const buyTx = await contract.buyTickets(selectedToken, ticketAmount, {
+        gasLimit: 300000
+      });
+      await buyTx.wait();
+
       setTicketAmount(1);
-      await updateLotteryState(connectedContract, account, signer);
+      await updateLotteryState();
       setIsModalOpen(false);
     } catch (err) {
-      handleError(err, 'Transaction failed');
+      handleError(err);
     } finally {
       setLoading(false);
     }
