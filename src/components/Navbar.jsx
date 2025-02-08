@@ -51,8 +51,8 @@ const Navbar = () => {
   const navLinks = [
     { path: '/', label: 'Home' },
     { path: '/buy-tickets', label: 'Buy Tickets' },
-   
-    { path: '/admin', label: 'Admin' }
+    { path: '/winner', label: 'Winners' },
+    //{ path: '/admin', label: 'Admin' }
   ];
 
   return (
@@ -108,3 +108,6 @@ const Navbar = () => {
 };
 
 export default Navbar;
+
+
+
