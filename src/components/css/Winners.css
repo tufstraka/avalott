@@ -235,4 +235,10 @@
     margin-top: 1.5rem;
     display: inline-block;
   }
+
+  .cyber-title{
+    display: flex;
+    flex-direction: row;
+
+  }
   
