@@ -273,4 +273,8 @@ contract MultiTokenLottery is ReentrancyGuard, Ownable {
         lotteryDuration = _newDuration;
         emit DurationUpdated(_newDuration);
     }
+<<<<<<< HEAD
 }
+=======
+}
+>>>>>>> 951ca7a8d36209f3ce75746cbff6c58aa6185452
