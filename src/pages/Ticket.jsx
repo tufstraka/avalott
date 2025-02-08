@@ -1,16 +1,26 @@
 import { useState, useEffect } from 'react';
 import { ethers } from 'ethers';
-import "./css/ticket.css";
 import LOTTERY_ABI_ARTIFACT from '../deployments/MultiTokenLottery.json';
 import PurchaseModal from '../components/PurchaseModal';
 import Graph from '../components/graph';
 import { getTokenName } from '../utils/helpers';
+import './css/ticket.css';
 
 const LOTTERY_ABI = LOTTERY_ABI_ARTIFACT.abi;
 const LOTTERY_ADDRESS = '0xeADD42c14c50397E64b4dc94a4beD91175c1E011';
+const AVALANCHE_TESTNET_PARAMS = {
+  chainId: '0xA869',
+  chainName: 'Avalanche Fuji Testnet',
+  nativeCurrency: {
+    name: 'AVAX',
+    symbol: 'AVAX',
+    decimals: 18
+  },
+  rpcUrls: ['https://api.avax-test.network/ext/bc/C/rpc'],
+  blockExplorerUrls: ['https://testnet.snowtrace.io/']
+};
 
 const Ticket = () => {
-  // State management
   const [provider, setProvider] = useState(null);
   const [contract, setContract] = useState(null);
   const [account, setAccount] = useState('');
@@ -28,11 +38,44 @@ const Ticket = () => {
   const [ticketAmount, setTicketAmount] = useState(1);
   const [selectedToken, setSelectedToken] = useState("");
   const [graphData, setGraphData] = useState(null);
+  const [walletType, setWalletType] = useState(null);
 
   const handleError = (err, message) => {
     console.error(message, err);
     setError(`${message}: ${err.message}`);
     setLoading(false);
+  };
+
+  const switchToAvalancheFuji = async () => {
+    try {
+      await window.ethereum.request({
+        method: 'wallet_switchEthereumChain',
+        params: [{ chainId: AVALANCHE_TESTNET_PARAMS.chainId }],
+      });
+    } catch (switchError) {
+      if (switchError.code === 4902) {
+        try {
+          await window.ethereum.request({
+            method: 'wallet_addEthereumChain',
+            params: [AVALANCHE_TESTNET_PARAMS],
+          });
+        } catch (addError) {
+          handleError(addError, 'Failed to add Avalanche Fuji network');
+        }
+      } else {
+        handleError(switchError, 'Failed to switch to Avalanche Fuji network');
+      }
+    }
+  };
+
+  const checkAndHandleNetwork = async () => {
+    if (!provider) return;
+    
+    const network = await provider.getNetwork();
+    if (network.chainId !== parseInt(AVALANCHE_TESTNET_PARAMS.chainId, 16)) {
+      setError('Please switch to Avalanche Fuji Testnet');
+      await switchToAvalancheFuji();
+    }
   };
 
   const updateLotteryState = async (contractInstance, userAccount, signer) => {
@@ -107,7 +150,6 @@ const Ticket = () => {
       }
 
       setGraphData({
-        //labels: availableTokens.map(getTokenName),
         values: availableTokens.map(token => tickets[token] || 0)
       });
 
@@ -118,19 +160,37 @@ const Ticket = () => {
     }
   };
 
-  // Initialize Web3 and contract
+  useEffect(() => {
+    const detectWallet = async () => {
+      if (typeof window.ethereum !== 'undefined') {
+        setWalletType('metamask');
+        await checkAndHandleNetwork();
+      } else if (typeof window.core !== 'undefined') {
+        setWalletType('core');
+      } else {
+        setError('Please install Core Wallet or MetaMask');
+      }
+    };
+
+    detectWallet();
+  }, []);
+
   useEffect(() => {
     const init = async () => {
-      if (typeof window.ethereum === 'undefined') {
-        setError('Please install MetaMask');
-        return;
-      }
+      if (!walletType) return;
 
       try {
-        const newProvider = new ethers.providers.Web3Provider(window.ethereum);
-        setProvider(newProvider);
+        const walletProvider = walletType === 'core' 
+          ? new ethers.providers.Web3Provider(window.core)
+          : new ethers.providers.Web3Provider(window.ethereum);
+        
+        setProvider(walletProvider);
 
-        const signer = newProvider.getSigner();
+        if (walletType === 'metamask') {
+          await checkAndHandleNetwork();
+        }
+
+        const signer = walletProvider.getSigner();
         const newContract = new ethers.Contract(LOTTERY_ADDRESS, LOTTERY_ABI, signer);
         setContract(newContract);
 
@@ -139,20 +199,17 @@ const Ticket = () => {
 
         await updateLotteryState(newContract, address, signer);
       } catch (err) {
-        if (err.code === 'ACTION_REJECTED') {
-          setError('Please connect your wallet to continue');
-        } else {
-          handleError(err, 'Failed to initialize');
-        }
+        handleError(err, 'Failed to initialize');
       }
     };
 
     init();
-  }, []);
+  }, [walletType]);
 
-  // Setup event listeners
   useEffect(() => {
-    if (!window.ethereum) return;
+    if (!window.ethereum && !window.core) return;
+
+    const provider = window.ethereum || window.core;
 
     const handleAccountsChanged = async (accounts) => {
       if (accounts.length > 0) {
@@ -173,36 +230,14 @@ const Ticket = () => {
       }
     };
 
-    window.ethereum.on('accountsChanged', handleAccountsChanged);
-    window.ethereum.on('chainChanged', () => window.location.reload());
+    provider.on('accountsChanged', handleAccountsChanged);
+    provider.on('chainChanged', () => window.location.reload());
 
     return () => {
-      window.ethereum.removeListener('accountsChanged', handleAccountsChanged);
-      window.ethereum.removeListener('chainChanged', () => {});
+      provider.removeListener('accountsChanged', handleAccountsChanged);
+      provider.removeListener('chainChanged', () => {});
     };
   }, [provider, contract]);
-
-  const connectWallet = async () => {
-    try {
-      if (typeof window.ethereum === 'undefined') {
-        throw new Error('MetaMask is not installed');
-      }
-
-      const accounts = await window.ethereum.request({ 
-        method: 'eth_requestAccounts' 
-      });
-      
-      const signer = provider?.getSigner();
-      if (signer && contract) {
-        const newContract = contract.connect(signer);
-        setContract(newContract);
-        setAccount(accounts[0]);
-        await updateLotteryState(newContract, accounts[0], signer);
-      }
-    } catch (err) {
-      handleError(err, 'Failed to connect wallet');
-    }
-  };
 
   const buyTickets = async () => {
     if (!contract || !selectedToken || !ticketAmount || !tokenConfigs[selectedToken]) {
@@ -313,16 +348,6 @@ const Ticket = () => {
             {error}
             <button onClick={() => setError('')}>×</button>
           </div>
-        )}
-
-        {!account && (
-          <button 
-            className="connect-button"
-            onClick={connectWallet}
-            disabled={loading}
-          >
-            Connect Wallet
-          </button>
         )}
 
         {graphData && (
