@@ -1,72 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { ethers } from 'ethers';
 import Confetti from 'react-confetti';
+import LOTTERY_ABI_ARTIFACT from '../deployments/MultiTokenLottery.json';
 import "./css/Winners.css";
 
 const CONTRACT_ADDRESS = '0xeADD42c14c50397E64b4dc94a4beD91175c1E011';
-const ABI = [
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": true,
-        "internalType": "address",
-        "name": "winner",
-        "type": "address"
-      },
-      {
-        "indexed": true,
-        "internalType": "address",
-        "name": "token",
-        "type": "address"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "prize",
-        "type": "uint256"
-      }
-    ],
-    "name": "WinnerSelected",
-    "type": "event"
-  },
-  {
-    "inputs": [],
-    "name": "getTokens",
-    "outputs": [
-      {
-        "internalType": "address[]",
-        "name": "",
-        "type": "address[]"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "lotteryActive",
-    "outputs": [
-      {
-        "internalType": "bool",
-        "name": "",
-        "type": "bool"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  }
-];
-
-const ERC20_ABI = [
-  "function symbol() view returns (string)",
-  "function decimals() view returns (uint8)"
-];
+const ABI = LOTTERY_ABI_ARTIFACT.abi;
 
 const generateBlockchainImage = (seed) => {
   const colors = ['#1a237e', '#ffd700', '#4a90e2', '#c2185b', '#ffa726'];
   const randomColor = colors[Math.abs(seed.charCodeAt(0)) % colors.length];
-  
   return `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
     <defs>
       <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
@@ -84,166 +27,102 @@ const generateBlockchainImage = (seed) => {
 };
 
 const WinnersPage = () => {
-  const [winners, setWinners] = useState([]);
-  const [latestWinner, setLatestWinner] = useState(null);
-  const [showNotification, setShowNotification] = useState(false);
-  const [isConnected, setIsConnected] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [winningAddress, setWinningAddress] = useState(null);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [contract, setContract] = useState(null);
-  const [provider, setProvider] = useState(null);
-  const [tokenDetails, setTokenDetails] = useState({});
-  const [showConfetti, setShowConfetti] = useState(false);
   const [windowSize, setWindowSize] = useState({
     width: typeof window !== 'undefined' ? window.innerWidth : 800,
     height: typeof window !== 'undefined' ? window.innerHeight : 600
   });
+  const [showConfetti, setShowConfetti] = useState(false);
 
+  // Update window size on resize
   useEffect(() => {
-    const handleResize = () => {
-      setWindowSize({
-        width: window.innerWidth,
-        height: window.innerHeight
-      });
-    };
-
+    const handleResize = () => setWindowSize({ width: window.innerWidth, height: window.innerHeight });
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  const connectWallet = async () => {
-    try {
-      if (typeof window.ethereum === 'undefined') {
-        throw new Error('MetaMask is not installed');
-      }
-
-      setLoading(true);
-      const accounts = await window.ethereum.request({ 
-        method: 'eth_requestAccounts' 
-      });
-      
-      const ethProvider = new ethers.providers.Web3Provider(window.ethereum);
-      const signer = ethProvider.getSigner();
-      const newContract = new ethers.Contract(CONTRACT_ADDRESS, ABI, signer);
-      
-      setProvider(ethProvider);
-      setContract(newContract);
-      setIsConnected(true);
-      setLoading(false);
-      
-    } catch (err) {
-      setError(err.message || 'Failed to connect wallet');
-      setLoading(false);
-      console.error('Connection error:', err);
+  // Helper: query events in batches to avoid exceeding the block range limit
+  const queryEventsInBatches = async (contract, filter, startBlock, endBlock, batchSize = 2048) => {
+    let events = [];
+    for (let from = startBlock; from <= endBlock; from += batchSize) {
+      const to = Math.min(from + batchSize - 1, endBlock);
+      const batchEvents = await contract.queryFilter(filter, from, to);
+      events = events.concat(batchEvents);
     }
+    return events;
   };
 
-  const getTokenDetails = async (tokenAddress) => {
-    if (tokenDetails[tokenAddress]) return tokenDetails[tokenAddress];
-    
-    try {
-      const tokenContract = new ethers.Contract(tokenAddress, ERC20_ABI, provider);
-      const [symbol, decimals] = await Promise.all([
-        tokenContract.symbol(),
-        tokenContract.decimals()
-      ]);
-      
-      const details = { symbol, decimals };
-      setTokenDetails(prev => ({ ...prev, [tokenAddress]: details }));
-      return details;
-    } catch (error) {
-      console.error('Error fetching token details:', error);
-      return { symbol: 'UNKNOWN', decimals: 18 };
-    }
-  };
-
-  const formatPrize = (prize, tokenAddress) => {
-    const details = tokenDetails[tokenAddress];
-    if (!details) return ethers.formatUnits(prize, 18);
-    return ethers.formatUnits(prize, details.decimals);
-  };
-
+  // Fetch WinnerSelected events from roughly the last 24 hours
   useEffect(() => {
-    const setupEventListener = async () => {
-      if (!contract || !provider) return;
+    const fetchLatestWinner = async () => {
+      try {
+        const provider = new ethers.providers.Web3Provider(window.ethereum);
+        const contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, provider);
 
-      const winnerFilter = contract.filters.WinnerSelected();
-      
-      // Listen for new winner events
-      contract.on(winnerFilter, async (winner, token, prize, event) => {
-        const tokenInfo = await getTokenDetails(token);
-        const formattedPrize = formatPrize(prize, token);
-        
-        const newWinner = {
-          address: winner,
-          token: token,
-          tokenSymbol: tokenInfo.symbol,
-          prize: formattedPrize,
-          transactionHash: event.transactionHash,
-          date: new Date().toLocaleString(),
-          image: generateBlockchainImage(winner)
-        };
+        // Filter for WinnerSelected events: WinnerSelected(address indexed winner, address indexed token, uint256 prize)
+        const winnerFilter = contract.filters.WinnerSelected();
 
-        setWinners(prev => [newWinner, ...prev]);
-        setLatestWinner(newWinner);
-        setShowNotification(true);
-        setShowConfetti(true);
-        setTimeout(() => {
-          setShowNotification(false);
-          setShowConfetti(false);
-        }, 5000);
-      });
+        // Approximate block range for the last 24 hours (assume ~6500 blocks/day)
+        const currentBlock = await provider.getBlockNumber();
+        const blocksPerDay = 6500;
+        const startBlock = currentBlock > blocksPerDay ? currentBlock - blocksPerDay : 0;
 
-      // Fetch past events
-      const pastEvents = await contract.queryFilter(winnerFilter, -10000);
-      const processedWinners = await Promise.all(
-        pastEvents.map(async (event) => {
-          const [winner, token, prize] = event.args;
-          const tokenInfo = await getTokenDetails(token);
-          const formattedPrize = formatPrize(prize, token);
-          
-          return {
-            address: winner,
-            token: token,
-            tokenSymbol: tokenInfo.symbol,
-            prize: formattedPrize,
-            transactionHash: event.transactionHash,
-            date: new Date((await event.getBlock()).timestamp * 1000).toLocaleString(),
-            image: generateBlockchainImage(winner)
-          };
-        })
-      );
+        // Query events in batches to avoid the 2048-block limit
+        const events = await queryEventsInBatches(contract, winnerFilter, startBlock, currentBlock);
 
-      setWinners(processedWinners.reverse());
-    };
-
-    if (isConnected) {
-      setupEventListener();
-    }
-
-    return () => {
-      if (contract) {
-        contract.removeAllListeners();
+        if (events.length > 0) {
+          const latestEvent = events[events.length - 1];
+          const [winner, token, prize] = latestEvent.args;
+          console.log("WinnerSelected event:", { winner, token, prize: prize.toString() });
+          setWinningAddress(winner);
+          setShowConfetti(true);
+          setTimeout(() => setShowConfetti(false), 5000);
+        }
+        setLoading(false);
+      } catch (err) {
+        console.error('Fetch error:', err);
+        setError('Failed to fetch latest winner: ' + err.message);
+        setLoading(false);
       }
     };
-  }, [isConnected, contract, provider]);
 
-  const NoWinnersDisplay = () => (
-    <div className="no-winners-container">
-      <div className="hologram-coin"></div>
-      <h2 className="future-text">No Winners Yet... The Future Awaits!</h2>
-      <p className="scroll-text">Be the first to make history in the lottery!</p>
-      {!isConnected && (
-        <button className="cyber-button" onClick={connectWallet} disabled={loading}>
-          {loading ? 'Initializing...' : 'Load Winners'}
-          <span className="cyber-button-glitch"></span>
-        </button>
-      )}
-    </div>
-  );
+    fetchLatestWinner();
+  }, []);
 
   return (
     <div className="cyber-container">
+      <div className="grid-overlays"></div>
+      <div className="node-animation"></div>
+
+      <h1 className="cyber-title">🏆 Daily Lottery Winner</h1>
+
+      {loading && (
+        <div className="loading-container">
+          <div className="cyber-loader"></div>
+          <p>Loading today's winner...</p>
+        </div>
+      )}
+
+      {!loading && error && (
+        <div className="cyber-error">{error}</div>
+      )}
+
+      {!loading && !error && winningAddress ? (
+        <div className="latest-winner">
+          <h2>Today's Winning Address</h2>
+          <p className="winner-address">{winningAddress}</p>
+          <img
+            src={generateBlockchainImage(winningAddress)}
+            alt="Winner's blockchain pattern"
+            className="winner-image"
+          />
+        </div>
+      ) : (
+        !loading && !error && <div className="no-winner">No winner yet for today.</div>
+      )}
+
       {showConfetti && (
         <Confetti
           width={windowSize.width}
@@ -254,77 +133,9 @@ const WinnersPage = () => {
           gravity={0.3}
         />
       )}
-      
-      <div className="grid-overlays"></div>
-      <div className="node-animation"></div>
-
-      <h1 className="cyber-title">🏆 Cyber Lottery Winners</h1>
-
-      {!isConnected && (
-        <div className="connect-section">
-          <NoWinnersDisplay />
-          {error && <div className="cyber-error">{error}</div>}
-        </div>
-      )}
-
-      {isConnected && loading && (
-        <div className="loading-container">
-          <div className="cyber-loader"></div>
-          <p>Initializing blockchain connection...</p>
-        </div>
-      )}
-
-      {isConnected && !loading && winners.length === 0 && (
-        <>
-          {error && <div className="cyber-error">{error}</div>}
-          <NoWinnersDisplay />
-        </>
-      )}
-
-      {showNotification && latestWinner && (
-        <div className="winner-notification">
-          🎉 New Winner: {latestWinner.address.substring(0, 6)}...{latestWinner.address.substring(38)} 
-          won {latestWinner.prize} {latestWinner.tokenSymbol}!
-        </div>
-      )}
-
-      {isConnected && winners.length > 0 && (
-        <div className="winners-grid">
-          {winners.map((winner, index) => (
-            <div key={index} className="winner-card">
-              <div className="card-hologram">
-                <img 
-                  src={winner.image} 
-                  alt="Winner's blockchain pattern" 
-                  className="winner-image"
-                />
-              </div>
-              <div className="winner-details">
-                <h2 className="winner-address">
-                  {winner.address.substring(0, 6)}...{winner.address.substring(38)}
-                </h2>
-                <p className="winner-prize">
-                  {winner.prize} {winner.tokenSymbol}
-                  <span className="token-address">
-                    ({winner.token.substring(0, 6)}...{winner.token.substring(38)})
-                  </span>
-                </p>
-                <p className="winner-date">{winner.date}</p>
-                <a 
-                  href={`https://etherscan.io/tx/${winner.transactionHash}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="transaction-link"
-                >
-                  View Transaction
-                </a>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
     </div>
   );
 };
 
 export default WinnersPage;
+
