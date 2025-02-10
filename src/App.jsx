@@ -4,7 +4,7 @@ import Home	 from './pages/home'
 import Navbar from './Components/Navbar'
 import Footer from './Components/Footer'
 import AdminDashboard from './pages/AdminDashboard'
-import WinnersPage from './Components/Winner'
+import WinnersPage from './components/Winner'
 
 
 import { Route, Routes } from 'react-router-dom';

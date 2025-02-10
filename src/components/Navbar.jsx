@@ -51,15 +51,15 @@ const Navbar = () => {
   const navLinks = [
     { path: '/', label: 'Home' },
     { path: '/buy-tickets', label: 'Buy Tickets' },
-   
-    { path: '/admin', label: 'Admin' }
+    { path: '/winner', label: 'Winners' },
+    //{ path: '/admin', label: 'Admin' }
   ];
 
   return (
     <header className="header">
       <div className="header-content">
         <Link to="/" className="logo">
-          <h1>Lottery-DAO</h1>
+          <h1>Avalot</h1>
         </Link>
 
         {/* Mobile menu button */}
@@ -108,3 +108,6 @@ const Navbar = () => {
 };
 
 export default Navbar;
+
+
+

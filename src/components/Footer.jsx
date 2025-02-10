@@ -6,7 +6,7 @@ const Footer = () => {
     <footer className="footer">
       <div className="footer-content">
         <div className="footer-section">
-          <h3>Lottery-DAO</h3>
+          <h3>Avalot</h3>
           <p>Decentralized lottery platform powered by blockchain technology.</p>
           <div className="social-links">
             {/* <a href="https://discord.com" target="_blank" rel="noopener noreferrer">Discord</a> */}
