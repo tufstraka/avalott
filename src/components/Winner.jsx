@@ -10,10 +10,11 @@ const ABI = LOTTERY_ABI_ARTIFACT.abi;
 const generateBlockchainImage = (seed) => {
   const colors = ['#1a237e', '#ffd700', '#4a90e2', '#c2185b', '#ffa726'];
   const randomColor = colors[Math.abs(seed.charCodeAt(0)) % colors.length];
-  return `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+  // Construct the SVG markup
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
     <defs>
       <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
-        <path d="M 20 0 L 0 0 0 20" fill="none" stroke="${randomColor}" strokeOpacity="0.2" strokeWidth="1"/>
+        <path d="M 20 0 L 0 0 0 20" fill="none" stroke="${randomColor}" stroke-opacity="0.2" stroke-width="1"/>
       </pattern>
       <radialGradient id="glow" cx="50%" cy="50%" r="50%" fx="50%" fy="50%">
         <stop offset="0%" style="stop-color:${randomColor};stop-opacity:0.5"/>
@@ -22,8 +23,10 @@ const generateBlockchainImage = (seed) => {
     </defs>
     <rect width="200" height="200" fill="url(#grid)"/>
     <circle cx="100" cy="100" r="80" fill="url(#glow)"/>
-    <polygon points="100,20 180,100 100,180 20,100" fill="${randomColor}" fillOpacity="0.3" stroke="${randomColor}" strokeWidth="2"/>
+    <polygon points="100,20 180,100 100,180 20,100" fill="${randomColor}" fill-opacity="0.3" stroke="${randomColor}" stroke-width="2"/>
   </svg>`;
+  // URL-encode the SVG string
+  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
 };
 
 const WinnersPage = () => {
@@ -43,7 +46,7 @@ const WinnersPage = () => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Helper: query events in batches to avoid exceeding the block range limit
+  // Helper: query events in batches (each ≤2048 blocks)
   const queryEventsInBatches = async (contract, filter, startBlock, endBlock, batchSize = 2048) => {
     let events = [];
     for (let from = startBlock; from <= endBlock; from += batchSize) {
@@ -64,12 +67,12 @@ const WinnersPage = () => {
         // Filter for WinnerSelected events: WinnerSelected(address indexed winner, address indexed token, uint256 prize)
         const winnerFilter = contract.filters.WinnerSelected();
 
-        // Approximate block range for the last 24 hours (assume ~6500 blocks/day)
+        // Approximate block range for last 24 hours (assume ~6500 blocks/day)
         const currentBlock = await provider.getBlockNumber();
         const blocksPerDay = 6500;
         const startBlock = currentBlock > blocksPerDay ? currentBlock - blocksPerDay : 0;
 
-        // Query events in batches to avoid the 2048-block limit
+        // Query events in batches to avoid exceeding the block range limit
         const events = await queryEventsInBatches(contract, winnerFilter, startBlock, currentBlock);
 
         if (events.length > 0) {
