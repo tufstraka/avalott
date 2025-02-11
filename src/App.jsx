@@ -1,6 +1,6 @@
 import './App.css'
 import Ticket from './pages/Ticket'
-import Home	 from './pages/home'
+import Home  from './pages/home'
 import Navbar from './Components/Navbar'
 import Footer from './Components/Footer'
 import AdminDashboard from './pages/AdminDashboard'
@@ -18,7 +18,7 @@ function App() {
         
         <main className="main-content">
           {/* Move grid overlay outside of Routes */}
-          <div className='grid-overlay'></div>
+          <div className='grid-overla'></div>
           
           <Routes>
             <Route path="/" element={<Home />} />
