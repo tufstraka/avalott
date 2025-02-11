@@ -269,6 +269,10 @@ contract MultiTokenLottery is ReentrancyGuard, Ownable {
     function updateLotteryDuration(uint256 _newDuration) external onlyAdminOrOwner() {
         if (_newDuration == 0) revert InvalidDuration();
         //if (lotteryActive) revert CannotUpdateDuringLottery();
+
+        // Adjust the current lottery's end time based on the new duration.
+        lotteryEndTime = block.timestamp + _newDuration;
+    
         
         lotteryDuration = _newDuration;
         emit DurationUpdated(_newDuration);

@@ -5,7 +5,7 @@ import LOTTERY_ABI_ARTIFACT from '../deployments/MultiTokenLottery.json';
 import { getTokenName } from '../utils/helpers';
 import "./css/AdminDashboard.css";
 
-const LOTTERY_ADDRESS = '0xeADD42c14c50397E64b4dc94a4beD91175c1E011';
+const LOTTERY_ADDRESS = '0xd43eCA4E63D6cc5D229c8066cE9DDbeb85090a28';
 const ADMINS = [
   '0xc283f1C9294d7A0299Cf98365687a17D671c4B60',
   '0xA3B224A0C87fdD3FA1916E79b9B997Fa006dCDb5',
@@ -41,7 +41,6 @@ const AdminDashboard = () => {
     showAdminPanel: false
   });
 
-
   const [data, setData] = useState({
     participantData: [],
     tokenList: [],
@@ -51,10 +50,24 @@ const AdminDashboard = () => {
 
   const handleError = (error, action = '') => {
     let message = error.message;
+    
     if (error.data) {
-      const decodedError = state.contract.interface.parseError(error.data);
-      message = decodedError?.args.join(' ') || error.message;
+      try {
+        const decodedError = state.contract.interface.parseError(error.data);
+        message = decodedError?.args?.join(' ') || error.message;
+      } catch (parseError) {
+        if (typeof error.data === 'string') {
+          message = error.data;
+        }
+      }
     }
+
+    if (message.includes('gas required exceeds allowance')) {
+      message = 'Transaction requires more gas than provided. Please try increasing the gas limit.';
+    } else if (message.includes('execution reverted')) {
+      message = 'Transaction failed. Please check if the lottery is in the correct state and you have the required permissions.';
+    }
+
     console.error(`Error ${action}:`, error);
     setState(prev => ({ ...prev, error: message, loading: false }));
   };
@@ -100,7 +113,11 @@ const AdminDashboard = () => {
   };
 
   const fetchTokenDecimals = async (tokenAddress) => {
-    const tokenContract = new ethers.Contract(tokenAddress, ['function decimals() view returns (uint8)'], state.contract.signer);
+    const tokenContract = new ethers.Contract(
+      tokenAddress,
+      ['function decimals() view returns (uint8)'],
+      state.contract.signer
+    );
     return await tokenContract.decimals();
   };
 
@@ -134,7 +151,6 @@ const AdminDashboard = () => {
 
       setData(prev => ({ ...prev, tokenList: tokens }));
 
-      // Fetch participant details
       const participantList = await Promise.all(
         Array.from({ length: Number(participantCount) }, (_, i) =>
           state.contract.participants(i)
@@ -147,7 +163,6 @@ const AdminDashboard = () => {
         tokenUsed: p.tokenUsed,
       }));
 
-      // Fetch token details
       const tokenDetails = {};
       await Promise.all(
         tokens.map(async (token) => {
@@ -178,6 +193,61 @@ const AdminDashboard = () => {
     }
   };
 
+  const executeTransaction = async (transaction, successMessage = '') => {
+    try {
+      setState(prev => ({ ...prev, loading: true }));
+  
+      // Set a higher default gas limit for complex transactions
+      const defaultGasLimit = ethers.utils.hexlify(1000000); // 1M gas units
+  
+      let gasLimit;
+      try {
+        // Try to estimate gas with a 50% buffer
+        const estimatedGas = await transaction.estimateGas();
+        gasLimit = estimatedGas.mul(150).div(100);
+      } catch (error) {
+        console.warn('Gas estimation failed, using default gas limit:', error);
+        gasLimit = defaultGasLimit;
+      }
+  
+      // Execute transaction with determined gas limit
+      const tx = await transaction({
+        gasLimit: gasLimit
+      });
+  
+      // Wait for confirmation with extended timeout
+      const receipt = await Promise.race([
+        tx.wait(),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Transaction confirmation timeout')), 120000)
+        )
+      ]);
+  
+      if (receipt.status === 0) {
+        throw new Error('Transaction failed during execution');
+      }
+  
+      await fetchLotteryData();
+      if (successMessage) alert(successMessage);
+  
+    } catch (error) {
+      let errorMessage = error.message;
+  
+      if (error.code === 'UNPREDICTABLE_GAS_LIMIT') {
+        errorMessage = 'Cannot estimate gas. Please verify the transaction parameters and try again.';
+      }
+  
+      console.error('Transaction error:', error);
+      setState(prev => ({ 
+        ...prev, 
+        error: errorMessage,
+        loading: false 
+      }));
+    } finally {
+      setState(prev => ({ ...prev, loading: false }));
+    }
+  };
+
   const addNewAdmin = async (e) => {
     e.preventDefault();
     if (!ethers.utils.isAddress(adminState.newAdmin)) {
@@ -186,15 +256,14 @@ const AdminDashboard = () => {
     }
 
     await executeTransaction(
-      () => state.contract.addAdmin(adminState.newAdmin, { gasLimit: 800000 }),
+      () => state.contract.addAdmin(adminState.newAdmin),
       'Admin added successfully'
     );
-    ADMINS.push(adminState.newAdmin)
+    ADMINS.push(adminState.newAdmin);
     setAdminState(prev => ({ ...prev, newAdmin: '' }));
     await fetchAdminList();
   };
 
-  // Remove admin
   const removeExistingAdmin = async (adminAddress) => {
     await executeTransaction(
       () => state.contract.removeAdmin(adminAddress),
@@ -203,7 +272,6 @@ const AdminDashboard = () => {
     await fetchAdminList();
   };
 
-  // Update lottery duration
   const updateDuration = async (e) => {
     e.preventDefault();
     const duration = parseInt(adminState.newDuration);
@@ -219,7 +287,6 @@ const AdminDashboard = () => {
     setAdminState(prev => ({ ...prev, newDuration: '' }));
   };
 
-  // Fetch admin status
   const fetchAdminList = async () => {
     if (!state.contract) return;
     
@@ -236,13 +303,164 @@ const AdminDashboard = () => {
     }
   };
 
-  // Add to useEffect
+  const startLottery = () => executeTransaction(
+    () => state.contract.startLottery(),
+    'Lottery started successfully'
+  );
+
+  const endLottery = async () => {
+    try {
+      setState(prev => ({ ...prev, loading: true }));
+  
+      // Comprehensive state checks
+      const [
+        active,
+        endTime,
+        participantCount,
+      ] = await Promise.all([
+        state.contract.lotteryActive(),
+        state.contract.lotteryEndTime(),
+        state.contract.getParticipantCount(),
+      ]);
+  
+      const now = Math.floor(Date.now() / 1000);
+  
+      // Detailed validation with specific error messages
+      if (!active) {
+        throw new Error('Lottery is not currently active');
+      }
+
+  
+      // Get all supported tokens and their balances
+      const tokens = await state.contract.getTokens();
+      const tokenBalances = await Promise.all(
+        tokens.map(async (token) => {
+          const tokenContract = new ethers.Contract(
+            token,
+            ['function balanceOf(address) view returns (uint256)'],
+            state.contract.provider
+          );
+          return tokenContract.balanceOf(state.contract.address);
+        })
+      );
+  
+      // Check if there are any tokens with non-zero balances
+      const hasTokenBalance = tokenBalances.some(balance => !balance.isZero());
+      if (!hasTokenBalance) {
+        throw new Error('No token balance available for prizes');
+      }
+  
+      console.log('Validation passed, attempting to end lottery with these parameters:', {
+        active,
+        endTime: new Date(Number(endTime) * 1000).toISOString(),
+        participantCount: Number(participantCount),
+        now: new Date(now * 1000).toISOString()
+      });
+  
+      // Execute with specific gas parameters
+      const tx = await state.contract.selectWinners({
+        gasLimit: ethers.utils.hexlify(2000000), // Increased gas limit to 2M
+        maxPriorityFeePerGas: ethers.utils.parseUnits('30', 'gwei'), // Adjust as needed
+        maxFeePerGas: ethers.utils.parseUnits('100', 'gwei') // Adjust as needed
+      });
+  
+      console.log('Transaction submitted:', tx.hash);
+  
+      // Wait for confirmation with extended timeout
+      const receipt = await Promise.race([
+        tx.wait(),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Transaction confirmation timeout')), 180000) // 3 minutes
+        )
+      ]);
+  
+      if (!receipt || receipt.status === 0) {
+        throw new Error('Transaction failed during execution. Please check the contract state.');
+      }
+  
+      console.log('Transaction confirmed:', receipt);
+  
+      // Verify the lottery was actually ended
+      const isStillActive = await state.contract.lotteryActive();
+      if (isStillActive) {
+        throw new Error('Transaction completed but lottery is still active. Please try again.');
+      }
+  
+      await fetchLotteryData();
+      alert('Lottery ended successfully');
+  
+    } catch (error) {
+      console.error('Detailed error in endLottery:', error);
+      
+      let errorMessage = 'Failed to end lottery: ';
+      
+      if (error.data) {
+        try {
+          // Try to decode the error if it's from the contract
+          const decodedError = state.contract.interface.parseError(error.data);
+          errorMessage += decodedError?.args?.join(' ') || error.message;
+        } catch {
+          // If we can't decode it, use the raw error message
+          errorMessage += error.message;
+        }
+      } else {
+        errorMessage += error.message;
+      }
+  
+      setState(prev => ({ 
+        ...prev, 
+        error: errorMessage,
+        loading: false 
+      }));
+    } finally {
+      setState(prev => ({ ...prev, loading: false }));
+    }
+  };
+
+  const addToken = async (e) => {
+    e.preventDefault();
+    try {
+      const code = await state.contract.provider.getCode(data.newToken.address);
+      if (code === '0x') throw new Error('Invalid contract address');
+
+      const decimals = await fetchTokenDecimals(data.newToken.address);
+      await executeTransaction(
+        () => state.contract.addToken(
+          data.newToken.address,
+          ethers.utils.parseUnits(data.newToken.ticketPrice, decimals)
+        ),
+        'Token added successfully'
+      );
+      setData(prev => ({ ...prev, newToken: { address: '', ticketPrice: '' } }));
+    } catch (error) {
+      handleError(error, 'adding token');
+    }
+  };
+
+  const updateTicketPrice = async (tokenAddress, newPrice) => {
+    try {
+      const decimals = await fetchTokenDecimals(tokenAddress);
+      const parsedPrice = ethers.utils.parseUnits(newPrice.toString(), decimals);
+      
+      await executeTransaction(
+        () => state.contract.updateTicketPrice(tokenAddress, parsedPrice),
+        'Ticket price updated successfully'
+      );
+    } catch (error) {
+      handleError(error);
+    }
+  };
+
+  const removeToken = (tokenAddress) => executeTransaction(
+    () => state.contract.removeToken(tokenAddress),
+    'Token removed successfully'
+  );
+
   useEffect(() => {
     if (state.contract && state.isOwner) {
       fetchAdminList();
     }
   }, [state.contract, state.isOwner]);
-
 
   useEffect(() => {
     const init = async () => {
@@ -288,71 +506,6 @@ const AdminDashboard = () => {
       return () => clearInterval(interval);
     }
   }, [state.contract, state.account]);
-
-  const executeTransaction = async (transaction, successMessage = '') => {
-    try {
-      setState(prev => ({ ...prev, loading: true }));
-      const tx = await transaction();
-      await tx.wait();
-      await fetchLotteryData();
-      if (successMessage) alert(successMessage);
-    } catch (error) {
-      handleError(error);
-    } finally {
-      setState(prev => ({ ...prev, loading: false }));
-    }
-  };
-
-  const startLottery = () => executeTransaction(
-    () => state.contract.startLottery({ gasLimit: 800000 }),
-    'Lottery started successfully'
-  );
-
-  const endLottery = () => executeTransaction(
-    () => state.contract.selectWinners({ gasLimit: 800000 }),
-    'Lottery ended successfully'
-  );
-
-  const addToken = async (e) => {
-    e.preventDefault();
-    try {
-      const code = await state.contract.provider.getCode(data.newToken.address);
-      if (code === '0x') throw new Error('Invalid contract address');
-
-      const decimals = await fetchTokenDecimals(data.newToken.address);
-      await executeTransaction(
-        () => state.contract.addToken(
-          data.newToken.address,
-          ethers.utils.parseUnits(data.newToken.ticketPrice, decimals)
-        ),
-        'Token added successfully'
-      );
-      setData(prev => ({ ...prev, newToken: { address: '', ticketPrice: '' } }));
-    } catch (error) {
-      handleError(error, 'adding token');
-    }
-  };
-
-  const updateTicketPrice = async (tokenAddress, newPrice) => {
-    try {
-      const decimals = await fetchTokenDecimals(tokenAddress);
-      console.log(decimals)
-      const parsedPrice = ethers.utils.parseUnits(newPrice.toString(), decimals);
-      console.log(`Updating price with value: ${parsedPrice.toString()}`);
-  
-      await executeTransaction(
-        () => state.contract.updateTicketPrice(tokenAddress, parsedPrice, { gasLimit: 800000 }),
-        'Ticket price updated successfully'
-      );
-    } catch (error) {
-      handleError(error);
-    }
-  };
-
-  const removeToken = (tokenAddress) => executeTransaction(
-    () => state.contract.removeToken(tokenAddress),
-    'Token removed successfully'
-  );
 
   if (state.error) {
     return (

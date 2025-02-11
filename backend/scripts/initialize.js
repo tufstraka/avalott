@@ -1,6 +1,6 @@
 async function main() {
     // Get the contract
-    const contractAddress = "0x9D69dBDF20B915529e67f1BE7E7AF91C6Ae568AE";
+    const contractAddress = "0xd43eCA4E63D6cc5D229c8066cE9DDbeb85090a28";
     const lottery = await ethers.getContractAt("MultiTokenLottery", contractAddress);
   
     // Add tokens

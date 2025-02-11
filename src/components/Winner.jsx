@@ -4,7 +4,7 @@ import Confetti from 'react-confetti';
 import LOTTERY_ABI_ARTIFACT from '../deployments/MultiTokenLottery.json';
 import "./css/Winners.css";
 
-const CONTRACT_ADDRESS = '0xeADD42c14c50397E64b4dc94a4beD91175c1E011';
+const CONTRACT_ADDRESS = '0xd43eCA4E63D6cc5D229c8066cE9DDbeb85090a28';
 const ABI = LOTTERY_ABI_ARTIFACT.abi;
 
 const generateBlockchainImage = (seed) => {

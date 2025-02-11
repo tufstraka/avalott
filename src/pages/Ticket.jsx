@@ -7,7 +7,7 @@ import Graph from '../components/graph';
 import { getTokenName } from '../utils/helpers';
 
 const LOTTERY_ABI = LOTTERY_ABI_ARTIFACT.abi;
-const LOTTERY_ADDRESS = '0xeADD42c14c50397E64b4dc94a4beD91175c1E011';
+const LOTTERY_ADDRESS = '0xd43eCA4E63D6cc5D229c8066cE9DDbeb85090a28';
 
 const Ticket = () => {
   // State management
