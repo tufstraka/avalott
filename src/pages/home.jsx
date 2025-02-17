@@ -21,18 +21,12 @@ const Home = () => {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  useEffect(() => {
-    const handleScroll = () => {
-      const scrolled = window.pageYOffset;
-      const waves = document.querySelectorAll('.wave');
-      waves.forEach((wave, index) => {
-        const speed = 0.2 + (index * 0.1);
-        wave.style.transform = `translate3d(-50%, ${scrolled * speed}px, 0)`;
-      });
-    };
 
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
+  useEffect(() => {
+    const isLowPowerMode = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (isLowPowerMode) {
+      // Optionally reduce animation complexity
+    }
   }, []);
 
   useEffect(() => {
@@ -123,17 +117,17 @@ const Home = () => {
   ];
 
   return (
-    <div className="home-container">
-      <GeometricBackground />
-      <div className="animated-background">
-        <div className="wave wave-1"></div>
-        <div className="wave wave-2"></div>
-        <div className="wave wave-3"></div>
-      </div>
-
+    <div className="home-container" style={{ position: 'relative', minHeight: '100vh' }}>
+    <GeometricBackground />
+      
+<div className="content-wrapper" style={{
+      position: 'relative',
+      zIndex: 2,
+      backgroundColor: 'transparent'
+    }}>
       <div className="scroll-progress" style={{ width: `${scrollProgress}%` }} />
 
-      <section className="hero-section">
+      <section className="hero-section"style={{ paddingTop: '80px' }}>
         <div className="hero-content">
           <h1 className="hero-title">
             <span className="holographic-text">Dream Bigger</span>
@@ -229,6 +223,7 @@ const Home = () => {
           ))}
         </div>
       </section>
+    </div>
     </div>
   );
 };
