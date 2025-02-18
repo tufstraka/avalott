@@ -342,6 +342,17 @@ body {
   object-fit: cover;
 }
 
+/* Adjust height for larger screens */
+@media (min-width: 1024px) { /* Adjust this breakpoint as needed */
+  .demo-video {
+    height: 38vh;
+    width: 44vw;
+  }
+  .video-showcase{
+    width:75vh;
+  }
+}
+
 /* Testimonials Section */
 .testimonials-grid {
   display: grid;
