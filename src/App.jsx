@@ -14,6 +14,7 @@ function App() {
   return (
     <>
       <div className="app-container">
+        <div className="grid-overlay"></div>
         <Navbar />
         
         <main className="main-content">

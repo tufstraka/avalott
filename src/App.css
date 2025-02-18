@@ -2,8 +2,10 @@
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+  background: radial-gradient(circle at center, #0A0F2B 0%, #080B1A 100%);
   color: #ffffff;
+  position: relative;
+  overflow: hidden;
 }
 
 .main-content {
@@ -16,36 +18,89 @@
 :root {
   --cyber-secondary: rgba(0, 255, 255, 0.2); /* Default cyber color */
   --grid-size: 50px; /* Adjust grid spacing */
+  --grid-color: rgba(0, 243, 255, 0.15);
+  --electric-blue: #00F3FF;
+  --dark-bg: #0A0F2B;
 }
 
 .grid-overlay {
   position: fixed;
+  top: -50%;
+  left: -50%;
+  right: -50%;
+  bottom: -50%;
+  background-image: 
+    linear-gradient(var(--grid-color) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-color) 1px, transparent 1px);
+  background-size: 15vw 15vw;
+  opacity: 0.3;
+  pointer-events: none;
+  z-index: 0;
+  transform: scale(2);
+  transform-origin: center;
+}
+
+/* Darkening gradient */
+.grid-overlay::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: radial-gradient(
+    circle at center,
+    transparent 0%,
+    rgba(10, 15, 43, 0.8) 35%,
+    rgba(10, 15, 43, 0.95) 75%
+  );
+  z-index: 1;
+}
+
+/* Intersection diamonds */
+.grid-overlay::after {
+  content: '';
+  position: absolute;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
   background-image: 
-    linear-gradient(var(--cyber-secondary) 1px, transparent 1px),
-    linear-gradient(90deg, var(--cyber-secondary) 1px, transparent 1px);
-  background-size: var(--grid-size) var(--grid-size);
-  opacity: 0.3; /* Increased opacity for testing */
+    radial-gradient(
+      circle at center,
+      var(--electric-blue) 2px,
+      transparent 2px
+    );
+  background-size: 15vw 15vw;
+  opacity: 0.8;
+  z-index: 2;
+  filter: drop-shadow(0 0 2px var(--electric-blue));
+}
+
+body {
+  margin: 0;
+  background-color: var(--dark-bg);
+  min-height: 100vh;
+  overflow-x: hidden;
+  font-family: "Poppins", serif;
+}
+
+.app-container::before {
+  content: '';
+  position: fixed;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: 
+    radial-gradient(circle at 50% 50%, rgba(0, 243, 255, 0.05) 0%, transparent 50%),
+    radial-gradient(circle at 80% 20%, rgba(0, 243, 255, 0.03) 0%, transparent 40%);
   pointer-events: none;
-  z-index: 0; /* Make sure it's on top of the background */
-  animation: grid-pulse 4s infinite;
+  z-index: 1;
 }
 
-@keyframes grid-pulse {
-  0%, 100% { opacity: 0.3; }
-  50% { opacity: 0.5; } /* Increased opacity during pulse */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
 }
-
-
-  * {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-  }
-  
-  body {
-    font-family: "Poppins", serif;
-  }
