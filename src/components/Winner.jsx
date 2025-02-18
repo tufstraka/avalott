@@ -96,7 +96,7 @@ const WinnersPage = () => {
 
   return (
     <div className="cyber-container">
-      <div className="grid-overlays"></div>
+      {/* <div className="grid-overlays"></div> */}
       <div className="node-animation"></div>
 
       <h1 className="cyber-title">🏆 Daily Lottery Winner</h1>
