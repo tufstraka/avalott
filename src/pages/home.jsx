@@ -132,7 +132,8 @@ const Home = () => {
               playsInline
               className="demo-video"
             >
-              <source src="/path-to-your-video.mp4" type="video/mp4" />
+              <source src="./src/pages/vid/Screen Recording 2025-02-18 191532.mp4" type="video/mp4" />
+              Your browser does not support the video tag.
             </video>
           </div>
         </div>
