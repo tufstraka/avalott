@@ -1,4 +1,4 @@
-# Avalot
+# Avalott
 
 A lottery system with the following features.
 
